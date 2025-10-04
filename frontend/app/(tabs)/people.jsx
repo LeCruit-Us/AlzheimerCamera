@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Image, TouchableOpacity, FlatList } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 const DATA = [
   {
@@ -33,6 +34,8 @@ function PersonRow({ item }) {
 }
 
 export default function People() {
+  const router = useRouter();
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
@@ -48,7 +51,10 @@ export default function People() {
           contentContainerStyle={{ paddingBottom: 24 }}
         />
 
-        <TouchableOpacity style={styles.fab}>
+        <TouchableOpacity 
+          style={styles.fab}
+          onPress={() => router.push('/add-person-modal')}
+        >
           <Text style={styles.fabPlus}>＋</Text>
         </TouchableOpacity>
       </View>
