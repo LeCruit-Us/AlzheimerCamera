@@ -1,0 +1,2 @@
+# AlzheimerCamera
+Stormhacks submission
