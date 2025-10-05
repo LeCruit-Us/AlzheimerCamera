@@ -19,6 +19,7 @@ const PURPLE = "#7C4DFF";
 
 export default function EditReminderModal() {
   const params = useLocalSearchParams();
+  const isEditMode = params.id !== undefined;
   const [title, setTitle] = useState(params.title as string || '');
   const [time, setTime] = useState(params.time as string || '');
   const [description, setDescription] = useState(params.description as string || '');
@@ -33,7 +34,8 @@ export default function EditReminderModal() {
       return;
     }
 
-    Alert.alert('Success', 'Reminder updated successfully', [
+    const message = isEditMode ? 'Reminder updated successfully' : 'Reminder added successfully';
+    Alert.alert('Success', message, [
       { text: 'OK', onPress: () => router.dismiss() }
     ]);
   };
@@ -52,7 +54,7 @@ export default function EditReminderModal() {
           <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Edit Reminder</Text>
+          <Text style={styles.title}>{isEditMode ? 'Edit Reminder' : 'Add Reminder'}</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -107,7 +109,7 @@ export default function EditReminderModal() {
               onPress={handleSubmit}
               disabled={!title.trim() || !time.trim()}
             >
-              <Text style={styles.submitButtonText}>Update Reminder</Text>
+              <Text style={styles.submitButtonText}>{isEditMode ? 'Update Reminder' : 'Add Reminder'}</Text>
             </TouchableOpacity>
           </ScrollView>
         </TouchableWithoutFeedback>

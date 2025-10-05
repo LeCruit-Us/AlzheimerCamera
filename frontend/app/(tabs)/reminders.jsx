@@ -81,7 +81,15 @@ export default function Reminders() {
           />
         ))}
 
-        <TouchableOpacity style={styles.fab}><Text style={styles.fabPlus}>＋</Text></TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.fab}
+          onPress={() => router.push({
+            pathname: '/edit-reminder-modal',
+            params: { title: '', time: '', description: '' }
+          })}
+        >
+          <Text style={styles.fabPlus}>＋</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
