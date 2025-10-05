@@ -31,7 +31,7 @@ export default function Home() {
           colors={["#FFB679", "#FFA36E"]}
           title="Scan Face"
           subtitle="Point camera at someone to learn who they are"
-          onPress={() => router.push("/people")}
+          onPress={() => router.push("/simple-camera")}
         />
 
         <GradientCard

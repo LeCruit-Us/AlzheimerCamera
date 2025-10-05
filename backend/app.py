@@ -138,6 +138,7 @@ def add_person():
         notes = data.get('notes', '')
         
         if not image_data or not name or not relationship:
+            print(f"Validation failed - image_data: {bool(image_data)}, name: '{name}', relationship: '{relationship}'")
             return jsonify({'error': 'Image, name, and relationship required'}), 400
         
         # Decode and convert image
@@ -251,6 +252,7 @@ def add_person():
             return jsonify({'error': 'No face detected'}), 400
             
     except Exception as e:
+        print(f"Add person error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/reminders', methods=['GET'])

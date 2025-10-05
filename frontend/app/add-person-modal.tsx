@@ -11,15 +11,29 @@ import {
   Image
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { api } from '../services/api';
 
 const PURPLE = "#7C4DFF";
 
 export default function AddPersonModal() {
+  const params = useLocalSearchParams();
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
+  const [age, setAge] = useState('');
+  const [notes, setNotes] = useState('');
   const [capturedImage, setCapturedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // If image was passed from camera, use it
+  React.useEffect(() => {
+    if (params.imageBase64) {
+      setCapturedImage({
+        uri: `data:image/jpeg;base64,${params.imageBase64}`,
+        base64: params.imageBase64 as string
+      } as any);
+    }
+  }, [params.imageBase64]);
 
   const handleTakePhoto = async () => {
     try {
@@ -58,10 +72,10 @@ export default function AddPersonModal() {
       return;
     }
     if (!role) {
-      Alert.alert('Error', 'Please select a role');
+      Alert.alert('Error', 'Please enter a relationship');
       return;
     }
-    if (!capturedImage) {
+    if (!capturedImage || !capturedImage.base64) {
       Alert.alert('Error', 'Please take a photo');
       return;
     }
@@ -69,30 +83,34 @@ export default function AddPersonModal() {
     setIsLoading(true);
     
     try {
-      // TODO: Implement API call here
-      // const response = await fetch('/api/people', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     name: name.trim(),
-      //     role,
-      //     faceImage: capturedImage.base64
-      //   })
-      // });
-
-      // Simulate API call for now
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      Alert.alert(
-        'Success', 
-        `${name} has been added successfully!`,
-        [
-          {
-            text: 'OK',
-            onPress: () => router.dismiss()
-          }
-        ]
+      const result = await api.addPerson(
+        capturedImage.base64,
+        name.trim(),
+        role.trim(),
+        age ? parseInt(age) : null,
+        notes.trim()
       );
+      
+      if (result.success) {
+        Alert.alert(
+          'Success!', 
+          result.updated ? 
+            `${name}'s information has been updated!` :
+            `${name} has been added successfully!`,
+          [
+            {
+              text: 'View People',
+              onPress: () => {
+                router.dismiss();
+                // Navigate to people tab
+                router.push('/(tabs)/people');
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to add person');
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to add person. Please try again.');
     } finally {
@@ -169,6 +187,31 @@ export default function AddPersonModal() {
               onChangeText={setRole}
               placeholder="e.g., Daughter, Son, Friend, Caregiver"
               placeholderTextColor="#999"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Age (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={age}
+              onChangeText={setAge}
+              placeholder="Enter age"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Notes (Optional)</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Any important details or memories"
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={3}
             />
           </View>
         </View>
@@ -324,6 +367,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
   },
   submitButton: {
     backgroundColor: PURPLE,

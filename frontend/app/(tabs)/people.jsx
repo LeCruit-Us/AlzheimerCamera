@@ -1,22 +1,8 @@
-import React from "react";
-import { View, Text, StyleSheet, Image, TouchableOpacity, FlatList } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, Image, TouchableOpacity, FlatList, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-
-const DATA = [
-  {
-    id: "1",
-    name: "Alice Chen",
-    relation: "Daughter",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format",
-  },
-  {
-    id: "2",
-    name: "Robert Johnson",
-    relation: "Son",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format",
-  },
-];
+import { useRouter, useFocusEffect } from "expo-router";
+import { api } from "../../services/api";
 
 function PersonRow({ item }) {
   return (
@@ -35,20 +21,54 @@ function PersonRow({ item }) {
 
 export default function People() {
   const router = useRouter();
+  const [people, setPeople] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Reload people when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPeople();
+    }, [])
+  );
+
+  const loadPeople = async () => {
+    console.log('Loading people from backend...');
+    try {
+      const response = await api.getReminders();
+      console.log('Backend response:', response);
+      if (response.reminders) {
+        const formattedPeople = response.reminders.map((person, index) => ({
+          id: index.toString(),
+          name: person.name,
+          relation: person.relationship,
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(person.name)}&background=7C4DFF&color=fff&size=200`
+        }));
+        console.log('Formatted people:', formattedPeople);
+        setPeople(formattedPeople);
+      }
+    } catch (error) {
+      console.error('Error loading people:', error);
+      Alert.alert('Error', 'Failed to load people');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <Text style={styles.h1}>People Stored</Text>
-        <Text style={styles.sub}>{DATA.length} people recognized</Text>
+        <Text style={styles.sub}>{people.length} people recognized</Text>
 
         <FlatList
           style={{ marginTop: 12 }}
-          data={DATA}
+          data={people}
           keyExtractor={(i) => i.id}
           renderItem={({ item }) => <PersonRow item={item} />}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           contentContainerStyle={{ paddingBottom: 24 }}
+          refreshing={loading}
+          onRefresh={loadPeople}
         />
 
         <TouchableOpacity 
@@ -56,6 +76,14 @@ export default function People() {
           onPress={() => router.push('/add-person-modal')}
         >
           <Text style={styles.fabPlus}>＋</Text>
+        </TouchableOpacity>
+        
+        {/* Debug button */}
+        <TouchableOpacity 
+          style={[styles.fab, { right: 90, backgroundColor: '#FF6B6B' }]}
+          onPress={loadPeople}
+        >
+          <Text style={styles.fabPlus}>↻</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
