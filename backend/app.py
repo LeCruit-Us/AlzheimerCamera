@@ -173,8 +173,9 @@ def generate_tts_audio(text):
             "text": text,
             "model_id": "eleven_monolingual_v1",
             "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.5
+                "stability": 0.7,
+                "similarity_boost": 0.5,
+                "speed": 0.8
             }
         }
         
@@ -640,6 +641,35 @@ def test_tts():
                 'audio': audio_base64,
                 'text': test_text,
                 'audio_length': len(audio_base64)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate audio'
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/generate-audio', methods=['POST'])
+def generate_audio():
+    """Generate TTS audio for arbitrary text"""
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        
+        if not text:
+            return jsonify({'error': 'Text is required'}), 400
+        
+        audio_base64 = generate_tts_audio(text)
+        
+        if audio_base64:
+            return jsonify({
+                'success': True,
+                'audio': audio_base64,
+                'text': text
             })
         else:
             return jsonify({

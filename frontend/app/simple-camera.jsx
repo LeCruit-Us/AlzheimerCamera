@@ -117,7 +117,7 @@ export default function SimpleCamera() {
             if (result.audio) {
               console.log('🔊 ATTEMPTING TO PLAY AUDIO');
               Vibration.vibrate([0, 200, 100, 200]); // Vibrate to indicate audio
-              playAudio(result.audio);
+              playAudioSequence(result.audio);
             } else {
               console.log('❌ NO AUDIO IN RESPONSE');
               console.log('Full result:', JSON.stringify(result, null, 2));
@@ -132,6 +132,49 @@ export default function SimpleCamera() {
         }
       }
     }, 2000); // Scan every 2 seconds
+  };
+
+  const playAudioSequence = async (initialAudio) => {
+    try {
+      // Play initial announcement
+      await playAudio(initialAudio);
+      
+      // Wait 2 seconds, then play "Do you remember this person?"
+      setTimeout(async () => {
+        try {
+          const response1 = await fetch('http://localhost:8000/generate-audio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: 'Do you remember this person?' })
+          });
+          const result1 = await response1.json();
+          if (result1.audio) {
+            await playAudio(result1.audio);
+            
+            // Wait 3 seconds, then play final message
+            setTimeout(async () => {
+              try {
+                const response2 = await fetch('http://localhost:8000/generate-audio', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ text: 'Click on the person in our app to see your memories with them.' })
+                });
+                const result2 = await response2.json();
+                if (result2.audio) {
+                  await playAudio(result2.audio);
+                }
+              } catch (error) {
+                console.error('Failed to play final message:', error);
+              }
+            }, 3000);
+          }
+        } catch (error) {
+          console.error('Failed to play question:', error);
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to start audio sequence:', error);
+    }
   };
 
   const playAudio = async (audioBase64) => {
@@ -286,13 +329,13 @@ export default function SimpleCamera() {
               <TouchableOpacity 
                 style={styles.testButton} 
                 onPress={async () => {
-                  console.log('Testing audio...');
+                  console.log('Testing audio sequence...');
                   try {
                     const response = await fetch('http://localhost:8000/test-tts');
                     const result = await response.json();
                     if (result.audio) {
-                      console.log('Got test audio, playing...');
-                      playAudio(result.audio);
+                      console.log('Got test audio, playing sequence...');
+                      playAudioSequence(result.audio);
                     } else {
                       console.log('No audio in test response');
                     }
