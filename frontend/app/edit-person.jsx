@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import { api, imagesToBase64 } from "../services/api";
 
 export default function EditPerson() {
   const router = useRouter();
@@ -87,32 +88,34 @@ export default function EditPerson() {
     try {
       setLoading(true);
 
-      // 1) Update person info
-      // await api.updatePerson({ personId, name, relationship, age: Number(age) || null, notes });
-
-      // 2) Upload photos if any
-      if (images.length) {
-        const form = new FormData();
-        form.append("personId", String(personId));
-        images.forEach((img, idx) => {
-          form.append("photos", {
-            uri: img.uri,
-            name: `photo_${idx}.jpg`,
-            type: "image/jpeg",
-          });
-        });
-
-        // Example:
-        // await fetch("https://your.api/upload-photos", {
-        //   method: "POST",
-        //   headers: { "Content-Type": "multipart/form-data" },
-        //   body: form,
-        // });
+      // Convert images to base64 if any
+      let imageBase64Array = [];
+      if (images.length > 0) {
+        const imageUris = images.map(img => img.uri);
+        imageBase64Array = await imagesToBase64(imageUris);
       }
 
-      Alert.alert("Saved", "Changes have been saved.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      // Update person info and upload images
+      const result = await api.editPerson(
+        personId,
+        name,
+        relationship,
+        age ? parseInt(age) : null,
+        notes,
+        imageBase64Array
+      );
+
+      if (result.success) {
+        const message = result.images_uploaded 
+          ? `Changes saved! ${result.images_uploaded} photos added to gallery.`
+          : "Changes have been saved.";
+        
+        Alert.alert("Saved", message, [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      } else {
+        Alert.alert("Error", result.error || "Failed to save changes.");
+      }
     } catch (e) {
       console.error(e);
       Alert.alert("Error", "Failed to save changes.");
@@ -132,10 +135,14 @@ export default function EditPerson() {
           style: "destructive",
           onPress: async () => {
             try {
-              // await api.deletePerson(personId);
-              Alert.alert("Deleted", "Person removed.", [
-                { text: "OK", onPress: () => router.replace("/people") },
-              ]);
+              const result = await api.deletePerson(personId);
+              if (result.success) {
+                Alert.alert("Deleted", "Person removed.", [
+                  { text: "OK", onPress: () => router.replace("/(tabs)/people") },
+                ]);
+              } else {
+                Alert.alert("Error", result.error || "Failed to delete person.");
+              }
             } catch (e) {
               console.error(e);
               Alert.alert("Error", "Failed to delete person.");
@@ -252,20 +259,23 @@ export default function EditPerson() {
   );
 }
 
-/* ---------- Replace these with your real API calls ---------- */
 async function fetchPersonDetail(personId) {
-  // Example shape returned from your backend:
-  // { name: 'Alice', relationship: 'Daughter', age: 34, notes: 'Visits on Sundays' }
-  // Stubbed for now:
-  await new Promise((r) => setTimeout(r, 300));
-  return {
-    name: "Sample Name",
-    relationship: "Family",
-    age: 70,
-    notes: "Example notes from backend.",
-  };
+  try {
+    const result = await api.getPersonDetails(personId);
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    return {
+      name: result.name || "",
+      relationship: result.relationship || "",
+      age: result.age || null,
+      notes: result.notes || "",
+    };
+  } catch (error) {
+    console.error("Error fetching person details:", error);
+    return null;
+  }
 }
-/* ----------------------------------------------------------- */
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#FAF7FF", paddingHorizontal: 16, paddingTop: 12 },

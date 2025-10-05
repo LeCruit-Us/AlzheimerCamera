@@ -41,7 +41,7 @@ export const api = {
   },
 
   // Edit a person
-  async editPerson(personId, name, relationship, age, notes) {
+  async editPerson(personId, name, relationship, age, notes, images = []) {
     const response = await fetch(`${API_BASE_URL}/edit_person/${personId}`, {
       method: 'PUT',
       headers: {
@@ -51,7 +51,8 @@ export const api = {
         name,
         relationship,
         age: parseInt(age) || null,
-        notes
+        notes,
+        images
       })
     });
     return response.json();
@@ -60,6 +61,43 @@ export const api = {
   // Delete a person
   async deletePerson(personId) {
     const response = await fetch(`${API_BASE_URL}/delete_person/${personId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    return response.json();
+  },
+
+  // Get person details
+  async getPersonDetails(personId) {
+    const response = await fetch(`${API_BASE_URL}/person/${personId}`);
+    return response.json();
+  },
+
+  // Get person's media gallery
+  async getPersonMedia(personId) {
+    const response = await fetch(`${API_BASE_URL}/person/${personId}/media`);
+    return response.json();
+  },
+
+  // Add images to person's gallery
+  async addPersonMedia(personId, images) {
+    const response = await fetch(`${API_BASE_URL}/person/${personId}/media`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        images: Array.isArray(images) ? images : [images]
+      })
+    });
+    return response.json();
+  },
+
+  // Delete specific media from person's gallery
+  async deletePersonMedia(personId, mediaId) {
+    const response = await fetch(`${API_BASE_URL}/person/${personId}/media/${mediaId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -91,6 +129,39 @@ export const imageToBase64 = async (imageUri) => {
     });
   } catch (error) {
     console.error('Error converting image to base64:', error);
+    throw error;
+  }
+};
+
+// Helper function to convert multiple image URIs to base64
+export const imagesToBase64 = async (imageUris) => {
+  try {
+    const promises = imageUris.map(uri => imageToBase64(uri));
+    return await Promise.all(promises);
+  } catch (error) {
+    console.error('Error converting images to base64:', error);
+    throw error;
+  }
+};
+
+// Update person with gallery images
+export const updatePersonWithImages = async (personId, personData, imageUris = []) => {
+  try {
+    let images = [];
+    if (imageUris.length > 0) {
+      images = await imagesToBase64(imageUris);
+    }
+    
+    return await api.editPerson(
+      personId,
+      personData.name,
+      personData.relationship,
+      personData.age,
+      personData.notes,
+      images
+    );
+  } catch (error) {
+    console.error('Error updating person with images:', error);
     throw error;
   }
 };

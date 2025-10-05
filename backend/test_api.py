@@ -41,6 +41,28 @@ def test_health():
     response = requests.get(f"{BASE_URL}/health")
     print("Health Response:", response.json())
 
+def test_get_media(person_id):
+    """Test getting person's media gallery"""
+    response = requests.get(f"{BASE_URL}/person/{person_id}/media")
+    print("Get Media Response:", response.json())
+    return response.json()
+
+def test_add_media(person_id, image_path="test_face.jpg"):
+    """Test adding media to person's gallery"""
+    image_b64 = encode_image(image_path)
+    
+    data = {"image": image_b64}
+    
+    response = requests.post(f"{BASE_URL}/person/{person_id}/media", json=data)
+    print("Add Media Response:", response.json())
+    return response.json()
+
+def test_delete_media(person_id, media_id):
+    """Test deleting media from person's gallery"""
+    response = requests.delete(f"{BASE_URL}/person/{person_id}/media/{media_id}")
+    print("Delete Media Response:", response.json())
+    return response.json()
+
 if __name__ == "__main__":
     print("Testing API...")
     
@@ -54,3 +76,27 @@ if __name__ == "__main__":
     # Test recognition (run this after adding)
     print("\n--- Testing Recognition ---")
     test_recognize()
+    
+    # Test media endpoints if person was added successfully
+    if add_result.get('success') and add_result.get('person_id'):
+        person_id = add_result['person_id']
+        
+        print(f"\n--- Testing Media Gallery for {person_id} ---")
+        
+        # Get initial media
+        print("\n--- Get Media ---")
+        test_get_media(person_id)
+        
+        # Add media
+        print("\n--- Add Media ---")
+        add_media_result = test_add_media(person_id)
+        
+        # Get media again to see the new addition
+        print("\n--- Get Media After Adding ---")
+        test_get_media(person_id)
+        
+        # Delete media if it was added successfully
+        if add_media_result.get('success') and add_media_result.get('media', {}).get('id'):
+            media_id = add_media_result['media']['id']
+            print(f"\n--- Delete Media {media_id} ---")
+            test_delete_media(person_id, media_id)

@@ -83,17 +83,24 @@ def recognize_face():
             person_info = db_response.get('Item', {})
             print(f"Person info: {person_info.get('name', 'Unknown')}")
             
-            # Use raw notes directly
-            raw_notes = person_info.get('notes', 'No additional information')
-            print(f"Using raw notes: {raw_notes[:50]}...")
+            # Create structured announcement with name, role, and age
+            name = person_info.get('name', 'Unknown person')
+            relationship = person_info.get('relationship', 'Unknown role')
+            age = person_info.get('age', 'Unknown age')
+            
+            # Create announcement text
+            announcement = f"This is {name}, your {relationship}, age {age}."
+            print(f"Generated announcement: {announcement}")
             
             # Generate TTS audio using ElevenLabs
-            audio_base64 = generate_tts_audio(raw_notes)
+            print(f"[TTS] Generating audio for person: {name}")
+            audio_base64 = generate_tts_audio(announcement)
+            print(f"[TTS] Audio generated: {bool(audio_base64)}, length: {len(audio_base64) if audio_base64 else 0}")
             
             result = {
                 'matched': True,
-                'person': {'name': person_info.get('name', 'Unknown')},
-                'note': raw_notes
+                'person': {'name': name},
+                'note': announcement
             }
             
             # Add audio if TTS was successful
@@ -166,20 +173,24 @@ def generate_tts_audio(text):
             "text": text,
             "model_id": "eleven_monolingual_v1",
             "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.5
+                "stability": 0.7,
+                "similarity_boost": 0.5,
+                "speed": 0.8
             }
         }
         
         print(f"[TTS] Generating audio for: {text[:50]}...")
+        print(f"[TTS] Using API key: {ELEVENLABS_API_KEY[:10]}...")
+        print(f"[TTS] Using voice ID: {ELEVENLABS_VOICE_ID}")
+        
         response = requests.post(url, json=data, headers=headers, timeout=30)
         
         if response.status_code == 200:
             audio_base64 = base64.b64encode(response.content).decode('utf-8')
-            print(f"[TTS] Audio generated successfully")
+            print(f"[TTS] Audio generated successfully, size: {len(response.content)} bytes")
             return audio_base64
         else:
-            print(f"[TTS] API error: {response.status_code}")
+            print(f"[TTS] API error: {response.status_code}, response: {response.text}")
             return None
             
     except Exception as e:
@@ -350,15 +361,52 @@ def get_reminders():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/person/<person_id>', methods=['GET'])
+def get_person_details(person_id):
+    """Get detailed information for a specific person"""
+    try:
+        # Get person info from DynamoDB
+        db_response = table.get_item(Key={'person_id': person_id})
+        person_info = db_response.get('Item')
+        
+        if not person_info:
+            return jsonify({'error': 'Person not found'}), 404
+        
+        # Generate presigned URL for main image
+        image_url = None
+        if person_info.get('s3_key'):
+            try:
+                image_url = s3.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': BUCKET_NAME, 'Key': person_info.get('s3_key')},
+                    ExpiresIn=3600
+                )
+            except Exception as e:
+                print(f"Error generating presigned URL: {e}")
+        
+        return jsonify({
+            'person_id': person_info.get('person_id'),
+            'name': person_info.get('name'),
+            'relationship': person_info.get('relationship'),
+            'age': person_info.get('age'),
+            'notes': person_info.get('notes'),
+            'created_at': person_info.get('created_at'),
+            'image_url': image_url
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/edit_person/<person_id>', methods=['PUT'])
 def edit_person(person_id):
-    """Edit a person's information"""
+    """Edit a person's information and optionally add gallery images"""
     try:
         data = request.get_json()
         name = data.get('name')
         relationship = data.get('relationship')
         age = data.get('age')
         notes = data.get('notes', '')
+        images = data.get('images', [])
         
         if not name or not relationship:
             return jsonify({'error': 'Name and relationship required'}), 400
@@ -377,7 +425,157 @@ def edit_person(person_id):
             }
         )
         
-        return jsonify({'success': True, 'message': 'Person updated successfully'})
+        # Handle gallery images if provided
+        uploaded_media = []
+        if images:
+            for image_data in images:
+                try:
+                    # Decode image
+                    if ',' in image_data:
+                        image_bytes = base64.b64decode(image_data.split(',')[1])
+                    else:
+                        image_bytes = base64.b64decode(image_data)
+                    
+                    # Convert to JPEG
+                    image = Image.open(io.BytesIO(image_bytes))
+                    if image.mode in ('RGBA', 'P'):
+                        image = image.convert('RGB')
+                    
+                    buffer = io.BytesIO()
+                    image.save(buffer, format='JPEG')
+                    image_bytes = buffer.getvalue()
+                    
+                    # Generate unique filename
+                    media_id = str(uuid.uuid4())
+                    s3_key = f"{person_id}/{media_id}.jpg"
+                    
+                    # Upload to S3
+                    s3.put_object(
+                        Bucket=BUCKET_NAME,
+                        Key=s3_key,
+                        Body=image_bytes,
+                        ContentType='image/jpeg'
+                    )
+                    
+                    uploaded_media.append(media_id)
+                except Exception as e:
+                    print(f"Error uploading image: {e}")
+                    continue
+        
+        response = {
+            'success': True, 
+            'message': 'Person updated successfully'
+        }
+        
+        if uploaded_media:
+            response['images_uploaded'] = len(uploaded_media)
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/person/<person_id>/media', methods=['GET'])
+def get_person_media(person_id):
+    """Get all media/images for a specific person"""
+    try:
+        # List all objects in the person's S3 folder
+        response = s3.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=f"{person_id}/"
+        )
+        
+        media = []
+        for obj in response.get('Contents', []):
+            # Generate presigned URL for each image
+            image_url = s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': obj['Key']},
+                ExpiresIn=3600
+            )
+            
+            # Extract filename for ID
+            filename = obj['Key'].split('/')[-1].split('.')[0]
+            
+            media.append({
+                'id': filename,
+                'type': 'image',
+                'uri': image_url,
+                'thumb': image_url  # Same URL for thumb
+            })
+        
+        return jsonify({'media': media})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/person/<person_id>/media', methods=['POST'])
+def add_person_media(person_id):
+    """Add new media/image to a person's gallery"""
+    try:
+        data = request.get_json()
+        image_data = data.get('image')
+        
+        if not image_data:
+            return jsonify({'error': 'No image provided'}), 400
+        
+        # Decode image
+        if ',' in image_data:
+            image_bytes = base64.b64decode(image_data.split(',')[1])
+        else:
+            image_bytes = base64.b64decode(image_data)
+        
+        # Convert to JPEG
+        image = Image.open(io.BytesIO(image_bytes))
+        if image.mode in ('RGBA', 'P'):
+            image = image.convert('RGB')
+        
+        buffer = io.BytesIO()
+        image.save(buffer, format='JPEG')
+        image_bytes = buffer.getvalue()
+        
+        # Generate unique filename
+        media_id = str(uuid.uuid4())
+        s3_key = f"{person_id}/{media_id}.jpg"
+        
+        # Upload to S3
+        s3.put_object(
+            Bucket=BUCKET_NAME,
+            Key=s3_key,
+            Body=image_bytes,
+            ContentType='image/jpeg'
+        )
+        
+        # Generate presigned URL for response
+        image_url = s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': s3_key},
+            ExpiresIn=3600
+        )
+        
+        return jsonify({
+            'success': True,
+            'media': {
+                'id': media_id,
+                'type': 'image',
+                'uri': image_url,
+                'thumb': image_url
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/person/<person_id>/media/<media_id>', methods=['DELETE'])
+def delete_person_media(person_id, media_id):
+    """Delete a specific media item from person's gallery"""
+    try:
+        s3_key = f"{person_id}/{media_id}.jpg"
+        
+        # Delete from S3
+        s3.delete_object(Bucket=BUCKET_NAME, Key=s3_key)
+        
+        return jsonify({'success': True, 'message': 'Media deleted successfully'})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -405,13 +603,17 @@ def delete_person(person_id):
             except Exception as e:
                 print(f"Error deleting from Rekognition: {e}")
         
-        # Delete from S3
-        s3_key = person_info.get('s3_key')
-        if s3_key:
-            try:
-                s3.delete_object(Bucket=BUCKET_NAME, Key=s3_key)
-            except Exception as e:
-                print(f"Error deleting from S3: {e}")
+        # Delete all media from S3 (entire person folder)
+        try:
+            response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{person_id}/")
+            if 'Contents' in response:
+                delete_keys = [{'Key': obj['Key']} for obj in response['Contents']]
+                s3.delete_objects(
+                    Bucket=BUCKET_NAME,
+                    Delete={'Objects': delete_keys}
+                )
+        except Exception as e:
+            print(f"Error deleting media from S3: {e}")
         
         # Delete from DynamoDB
         table.delete_item(Key={'person_id': person_id})
@@ -425,6 +627,95 @@ def delete_person(person_id):
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'healthy'})
+
+@app.route('/test-tts', methods=['GET'])
+def test_tts():
+    """Test TTS audio generation"""
+    try:
+        test_text = "This is John Smith, your son, age 35."
+        audio_base64 = generate_tts_audio(test_text)
+        
+        if audio_base64:
+            return jsonify({
+                'success': True,
+                'audio': audio_base64,
+                'text': test_text,
+                'audio_length': len(audio_base64)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate audio'
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/generate-audio', methods=['POST'])
+def generate_audio():
+    """Generate TTS audio for arbitrary text"""
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        
+        if not text:
+            return jsonify({'error': 'Text is required'}), 400
+        
+        audio_base64 = generate_tts_audio(text)
+        
+        if audio_base64:
+            return jsonify({
+                'success': True,
+                'audio': audio_base64,
+                'text': text
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate audio'
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/debug-person/<person_id>', methods=['GET'])
+def debug_person(person_id):
+    """Debug a specific person's data and audio generation"""
+    try:
+        # Get person info from DynamoDB
+        db_response = table.get_item(Key={'person_id': person_id})
+        person_info = db_response.get('Item')
+        
+        if not person_info:
+            return jsonify({'error': 'Person not found'}), 404
+        
+        # Create announcement
+        name = person_info.get('name', 'Unknown person')
+        relationship = person_info.get('relationship', 'Unknown role')
+        age = person_info.get('age', 'Unknown age')
+        announcement = f"This is {name}, your {relationship}, age {age}."
+        
+        # Generate audio
+        audio_base64 = generate_tts_audio(announcement)
+        
+        return jsonify({
+            'person_info': {
+                'name': name,
+                'relationship': relationship,
+                'age': age
+            },
+            'announcement': announcement,
+            'audio_generated': bool(audio_base64),
+            'audio_length': len(audio_base64) if audio_base64 else 0,
+            'audio': audio_base64 if audio_base64 else None
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)
