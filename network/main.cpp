@@ -1,3 +1,5 @@
+// Old network configuration for ESP32-CAM module
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
