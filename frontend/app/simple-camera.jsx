@@ -5,8 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
 import { api } from '../services/api';
 
 export default function SimpleCamera() {
@@ -14,11 +12,13 @@ export default function SimpleCamera() {
   const [scanning, setScanning] = useState(false);
   const [zoom, setZoom] = useState(0);
   const [lastResult, setLastResult] = useState('');
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const cameraRef = useRef(null);
   const router = useRouter();
   const scanInterval = useRef(null);
   const pendingAudio = useRef(null);
   const audioTimeout = useRef(null);
+  const currentAudio = useRef(null);
   
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -102,35 +102,44 @@ export default function SimpleCamera() {
             setLastResult(`✅ ${message}\n${note}`);
             
             // Store the latest audio and reset timeout
-            if (result.audio) {
-              pendingAudio.current = result.audio;
+            console.log('Checking for audio in result:', !!result.audio);
+            if (result.audio && result.audio.basic && result.audio.notes && !isPlayingAudio) {
+              console.log('Audio clips found, starting sequence');
               
-              // Clear existing timeout
+              // Stop any existing audio and clear timeouts
+              stopAllAudio();
               if (audioTimeout.current) {
                 clearTimeout(audioTimeout.current);
+                audioTimeout.current = null;
               }
               
-              // Set new timeout to play audio after delay
+              // Play audio sequence after delay
               audioTimeout.current = setTimeout(async () => {
-                if (pendingAudio.current) {
-                  try {
-                    // Write base64 audio to temporary file
-                    const audioUri = `${FileSystem.documentDirectory}temp_audio.mp3`;
-                    await FileSystem.writeAsStringAsync(audioUri, pendingAudio.current, {
-                      encoding: FileSystem.EncodingType.Base64,
-                    });
-                    
-                    // Play audio using Expo AV
-                    const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
-                    await sound.playAsync();
-                    
-                    console.log('Final audio played successfully');
-                  } catch (e) {
-                    console.error('Audio processing failed:', e);
+                try {
+                  console.log('Starting audio sequence...');
+                  
+                  // Play basic info with prompt
+                  await playAudioClip(result.audio.basic, 'Basic info with prompt');
+                  
+                  // Wait 3 seconds, then play notes
+                  console.log('Waiting 3 seconds...');
+                  await new Promise(resolve => setTimeout(resolve, 3000));
+                  
+                  // Only play notes if no other audio is playing
+                  if (!isPlayingAudio) {
+                    await playAudioClip(result.audio.notes, 'Notes');
                   }
-                  pendingAudio.current = null;
+                  
+                  console.log('Audio sequence completed!');
+                } catch (e) {
+                  console.error('Audio sequence failed:', e);
+                  setIsPlayingAudio(false);
                 }
-              }, 1000); // Wait 1 second for any pending responses
+              }, 1000);
+            } else if (isPlayingAudio) {
+              console.log('Audio already playing, skipping');
+            } else {
+              console.log('No audio clips in result');
             }
             
             console.log('RECOGNITION SUCCESS:', message, note);
@@ -146,6 +155,59 @@ export default function SimpleCamera() {
     }, 2000); // Scan every 2 seconds
   };
 
+  const stopAllAudio = () => {
+    if (currentAudio.current) {
+      currentAudio.current.pause();
+      currentAudio.current.currentTime = 0;
+      currentAudio.current = null;
+    }
+    setIsPlayingAudio(false);
+  };
+
+  const playAudioClip = (audioBase64, label) => {
+    return new Promise((resolve, reject) => {
+      try {
+        // Stop any currently playing audio
+        stopAllAudio();
+        
+        console.log(`Playing ${label}...`);
+        setIsPlayingAudio(true);
+        
+        const audioBlob = new Blob(
+          [Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0))], 
+          { type: 'audio/mpeg' }
+        );
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        currentAudio.current = audio;
+        
+        audio.onended = () => {
+          console.log(`${label} finished`);
+          URL.revokeObjectURL(audioUrl);
+          currentAudio.current = null;
+          setIsPlayingAudio(false);
+          resolve();
+        };
+        
+        audio.onerror = (e) => {
+          console.error(`${label} failed:`, e);
+          currentAudio.current = null;
+          setIsPlayingAudio(false);
+          reject(e);
+        };
+        
+        audio.play().catch((e) => {
+          currentAudio.current = null;
+          setIsPlayingAudio(false);
+          reject(e);
+        });
+      } catch (e) {
+        setIsPlayingAudio(false);
+        reject(e);
+      }
+    });
+  };
+
   const stopScanning = () => {
     setScanning(false);
     if (scanInterval.current) {
@@ -156,6 +218,7 @@ export default function SimpleCamera() {
       clearTimeout(audioTimeout.current);
       audioTimeout.current = null;
     }
+    stopAllAudio();
     setLastResult('');
     pendingAudio.current = null;
   };

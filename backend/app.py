@@ -83,24 +83,40 @@ def recognize_face():
             person_info = db_response.get('Item', {})
             print(f"Person info: {person_info.get('name', 'Unknown')}")
             
-            # Use raw notes directly
+            # Get person details
+            name = person_info.get('name', 'Unknown')
+            relationship = person_info.get('relationship', 'Unknown')
+            age = person_info.get('age', 'Unknown')
             raw_notes = person_info.get('notes', 'No additional information')
-            print(f"Using raw notes: {raw_notes[:50]}...")
             
-            # Generate TTS audio using ElevenLabs
-            audio_base64 = generate_tts_audio(raw_notes)
+            # Generate basic info audio with prompt
+            basic_info = f"This is {name}, your {relationship}, age {age}. Would you like to hear more information?"
+            basic_audio = generate_tts_audio(basic_info)
+            
+            # Generate notes audio
+            notes_audio = generate_tts_audio(raw_notes)
+            
+            print(f"Generated basic info: {basic_info}")
+            print(f"Using raw notes: {raw_notes[:50]}...")
             
             result = {
                 'matched': True,
-                'person': {'name': person_info.get('name', 'Unknown')},
+                'person': {
+                    'name': name,
+                    'relationship': relationship,
+                    'age': age
+                },
                 'note': raw_notes
             }
             
-            # Add audio if TTS was successful
-            if audio_base64:
-                result['audio'] = audio_base64
+            # Add audio clips if TTS was successful
+            if basic_audio and notes_audio:
+                result['audio'] = {
+                    'basic': basic_audio,
+                    'notes': notes_audio
+                }
             
-            print(f"Returning result with audio: {bool(audio_base64)}")
+            print(f"Returning result with audio clips: {bool(result.get('audio'))}")
             return jsonify(result)
         else:
             print("No matches found")
