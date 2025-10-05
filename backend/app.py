@@ -11,6 +11,20 @@ from PIL import Image
 import io
 import requests
 
+# Register HEIF support for iPhone images
+try:
+    import pillow_heif
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    HEIF_AVAILABLE = True
+    print("HEIF support enabled for iPhone images")
+except ImportError:
+    HEIF_AVAILABLE = False
+    print("pillow-heif not available - HEIC images from iPhones may not work")
+except Exception as e:
+    HEIF_AVAILABLE = False
+    print(f"Error registering HEIF support: {e}")
+
 # Load environment variables
 load_dotenv()
 
@@ -220,16 +234,39 @@ def add_person():
             else:
                 image_bytes = base64.b64decode(image_data)
             
-            # Convert to JPEG for Rekognition
-            image = Image.open(io.BytesIO(image_bytes))
-            if image.mode in ('RGBA', 'P'):
-                image = image.convert('RGB')
-            
-            buffer = io.BytesIO()
-            image.save(buffer, format='JPEG')
-            image_bytes = buffer.getvalue()
+            # Try to open and convert image
+            try:
+                # Check if it's a HEIC file and handle specially
+                if b'ftyp' in image_bytes[:20] and b'heic' in image_bytes[:20]:
+                    print("Detected HEIC image, using pillow_heif")
+                    if HEIF_AVAILABLE:
+                        try:
+                            heif_file = pillow_heif.open_heif(io.BytesIO(image_bytes))
+                            image = heif_file.to_pillow()
+                        except Exception as heif_error:
+                            print(f"HEIF processing failed: {heif_error}")
+                            return jsonify({'error': 'Failed to process HEIC image'}), 400
+                    else:
+                        return jsonify({'error': 'HEIC images not supported on this server'}), 400
+                else:
+                    # Regular image processing
+                    image = Image.open(io.BytesIO(image_bytes))
+                
+                # Convert to RGB if needed
+                if image.mode in ('RGBA', 'P', 'L'):
+                    image = image.convert('RGB')
+                
+                # Save as JPEG
+                buffer = io.BytesIO()
+                image.save(buffer, format='JPEG', quality=85)
+                image_bytes = buffer.getvalue()
+                print(f"Converted image size: {len(image_bytes)} bytes")
+            except Exception as img_error:
+                print(f"Image processing failed: {img_error}")
+                return jsonify({'error': 'Unsupported image format. Please use JPEG, PNG, or HEIC.'}), 400
         except Exception as e:
-            return jsonify({'error': f'Image conversion failed: {str(e)}'}), 400
+            print(f"Image processing error: {str(e)}")
+            return jsonify({'error': f'Image processing failed: {str(e)}'}), 400
         
         # Check if person already exists
         try:
@@ -430,6 +467,9 @@ def edit_person(person_id):
         uploaded_media = []
         if images:
             for image_data in images:
+                # Generate unique filename first
+                media_id = str(uuid.uuid4())
+                
                 try:
                     # Decode image
                     if ',' in image_data:
@@ -437,20 +477,36 @@ def edit_person(person_id):
                     else:
                         image_bytes = base64.b64decode(image_data)
                     
-                    # Convert to JPEG
-                    image = Image.open(io.BytesIO(image_bytes))
-                    if image.mode in ('RGBA', 'P'):
+                    print(f"Gallery image data length: {len(image_bytes)} bytes")
+                    print(f"First 20 bytes: {image_bytes[:20]}")
+                    
+                    # Check if it's a HEIC file and handle specially
+                    if b'ftyp' in image_bytes[:20] and b'heic' in image_bytes[:20]:
+                        print("Detected HEIC image, using pillow_heif")
+                        if HEIF_AVAILABLE:
+                            try:
+                                heif_file = pillow_heif.open_heif(io.BytesIO(image_bytes))
+                                image = heif_file.to_pillow()
+                            except Exception as heif_error:
+                                print(f"HEIF processing failed: {heif_error}")
+                                continue
+                        else:
+                            print("HEIF support not available, skipping image")
+                            continue
+                    else:
+                        # Regular image processing
+                        image = Image.open(io.BytesIO(image_bytes))
+                    
+                    # Convert to RGB if needed
+                    if image.mode in ('RGBA', 'P', 'L'):
                         image = image.convert('RGB')
                     
                     buffer = io.BytesIO()
-                    image.save(buffer, format='JPEG')
+                    image.save(buffer, format='JPEG', quality=85)
                     image_bytes = buffer.getvalue()
                     
-                    # Generate unique filename
-                    media_id = str(uuid.uuid4())
-                    s3_key = f"{person_id}/{media_id}.jpg"
-                    
                     # Upload to S3
+                    s3_key = f"{person_id}/{media_id}.jpg"
                     s3.put_object(
                         Bucket=BUCKET_NAME,
                         Key=s3_key,
@@ -459,8 +515,9 @@ def edit_person(person_id):
                     )
                     
                     uploaded_media.append(media_id)
+                    
                 except Exception as e:
-                    print(f"Error uploading image: {e}")
+                    print(f"Error processing image: {e}")
                     continue
         
         response = {

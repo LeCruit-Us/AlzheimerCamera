@@ -187,8 +187,8 @@ export default function SimpleCamera() {
                 } else {
                   // No notes, play final message directly
                   const finalMessage = personName ? 
-                    `Open the Remember Me app, click on memories, then click on ${personName} to see more of your memories with them.` :
-                    'Open the Remember Me app, click on memories, then click on the person to see more of your memories with them.';
+                    `Open our app, click on memories, then click on ${personName} to see more of your memories with them.` :
+                    'Open our app, click on memories, then click on the person to see more of your memories with them.';
                   const response3 = await fetch('http://localhost:8000/generate-audio', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
