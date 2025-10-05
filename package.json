@@ -2,5 +2,9 @@
   "dependencies": {
     "expo-camera": "^17.0.8",
     "expo-image-picker": "^17.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
   }
 }
