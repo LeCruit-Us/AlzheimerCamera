@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import json
 from PIL import Image
 import io
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +27,8 @@ bedrock = boto3.client('bedrock-runtime')
 BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'alzheimer-camera-faces')
 COLLECTION_ID = os.getenv('REKOGNITION_COLLECTION_ID', 'alzheimer-faces')
 TABLE_NAME = os.getenv('DYNAMODB_TABLE_NAME', 'alzheimer-persons')
+ELEVENLABS_API_KEY = os.getenv('ELEVEN_LAB_API_KEY')
+ELEVENLABS_VOICE_ID = os.getenv('VOICE_ID')
 
 # DynamoDB table
 table = dynamodb.Table(TABLE_NAME)
@@ -78,10 +81,19 @@ def recognize_face():
             # Generate AI note using Bedrock
             ai_note = generate_bedrock_note(person_info)
             
-            return jsonify({
+            # Generate TTS audio using ElevenLabs
+            audio_base64 = generate_tts_audio(ai_note)
+            
+            response_data = {
                 'matched': True,
                 'note': ai_note
-            })
+            }
+            
+            # Add audio if TTS was successful
+            if audio_base64:
+                response_data['audio'] = audio_base64
+            
+            return jsonify(response_data)
         else:
             return jsonify({
                 'matched': False,
@@ -125,6 +137,49 @@ def generate_bedrock_note(person_info):
         return response_body.get('results', [{}])[0].get('outputText', '').strip()
     except Exception as e:
         return f"This is {name}, your {relationship}. They care about you very much."
+
+def generate_tts_audio(text):
+    """Generate TTS audio using ElevenLabs and return as base64"""
+    try:
+        if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
+            print("ElevenLabs API key or Voice ID not configured")
+            return None
+        
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+        
+        headers = {
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": ELEVENLABS_API_KEY
+        }
+        
+        data = {
+            "text": text,
+            "model_id": "eleven_monolingual_v1",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.5
+            }
+        }
+        
+        print(f"[TTS] Generating audio for text: {text[:50]}...")
+        response = requests.post(url, json=data, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            # Convert audio to base64
+            audio_base64 = base64.b64encode(response.content).decode('utf-8')
+            print(f"[TTS] Successfully generated audio ({len(audio_base64)} chars base64)")
+            return audio_base64
+        else:
+            print(f"[TTS] API error: {response.status_code} - {response.text}")
+            return None
+            
+    except requests.exceptions.Timeout:
+        print("[TTS] Request timeout")
+        return None
+    except Exception as e:
+        print(f"[TTS] Error: {str(e)}")
+        return None
 
 @app.route('/add_person', methods=['POST'])
 def add_person():
