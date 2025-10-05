@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert, FlatList, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert, FlatList, RefreshControl, Vibration } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -11,7 +11,7 @@ import {
   normalizeTimeString,
 } from "../../state/remindersStore";
 
-function ReminderCard({ id, title, time, description, value, onValueChange, onDelete, onEdit }) {
+function ReminderCard({ id, title, time, description, value, onValueChange, onDelete, onEdit, onBellPress }) {
   const handleDelete = () => {
     Alert.alert(
       'Delete Reminder',
@@ -29,7 +29,9 @@ function ReminderCard({ id, title, time, description, value, onValueChange, onDe
 
   return (
     <View style={styles.card}>
-      <View style={styles.bell}><Text style={{ fontSize: 22 }}>🔔</Text></View>
+      <TouchableOpacity style={styles.bell} onPress={onBellPress} activeOpacity={0.7}>
+        <Text style={{ fontSize: 22 }}>🔔</Text>
+      </TouchableOpacity>
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.time}>{time}</Text>
@@ -81,6 +83,7 @@ export default function Reminders() {
         triggeredRef.current.ids.add(reminder.id);
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Vibration.vibrate(600);
       });
     }, 30000);
 
@@ -119,6 +122,10 @@ export default function Reminders() {
       onValueChange={(value) => handleToggle(item.id, value)}
       onDelete={handleDelete}
       onEdit={handleEdit}
+      onBellPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        Vibration.vibrate(400);
+      }}
     />
   );
 
