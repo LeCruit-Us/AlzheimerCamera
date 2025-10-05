@@ -7,12 +7,13 @@ import time
 
 url = "http://127.0.0.1:5000/audio"
 
+sd.default.device = 6
 duration = 3  # seconds per chunk
-samplerate = 44100
+samplerate = 16000.0 # do not change
 
 while True:
     # record audio chunk
-    recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='int16', device=3)
+    recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='int16')
     sd.wait()
 
     # convert to bytes
