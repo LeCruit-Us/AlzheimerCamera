@@ -4,7 +4,7 @@ import base64
 import json
 import time
 
-url = "http://your-server.com/upload"
+url = "http://127.0.0.1:5000/upload"
 
 cap = cv2.VideoCapture(2)
 
