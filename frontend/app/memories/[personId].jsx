@@ -25,6 +25,7 @@ export default function PersonMemories() {
   const [media, setMedia] = useState([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [personData, setPersonData] = useState(null);
 
   const fade = useRef(new Animated.Value(1)).current;
   const timerRef = useRef(null);
@@ -37,6 +38,15 @@ export default function PersonMemories() {
   const onViewRef = useRef(({ viewableItems }) => {
     if (viewableItems?.length) setViewerIndex(viewableItems[0].index ?? 0);
   });
+
+  const loadPersonData = async () => {
+    try {
+      const result = await api.getPersonDetails(params.personId);
+      setPersonData(result);
+    } catch (error) {
+      console.error("Error loading person data:", error);
+    }
+  };
 
   const loadMedia = async () => {
     try {
@@ -58,6 +68,7 @@ export default function PersonMemories() {
   useFocusEffect(
     React.useCallback(() => {
       if (params.personId) {
+        loadPersonData();
         loadMedia();
       }
     }, [params.personId])
@@ -128,10 +139,10 @@ export default function PersonMemories() {
                 pathname: "/edit-person",
                 params: {
                   personId: params.personId,
-                  name: params.name ?? "",
-                  relationship: params.relationship ?? "",
-                  age: params.age ?? "",
-                  notes: params.notes ?? "",
+                  name: personData?.name ?? "",
+                  relationship: personData?.relationship ?? "",
+                  age: personData?.age ?? "",
+                  notes: personData?.notes ?? "",
                 },
               })
             }

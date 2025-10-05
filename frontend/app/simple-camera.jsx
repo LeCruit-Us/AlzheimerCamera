@@ -117,7 +117,7 @@ export default function SimpleCamera() {
             if (result.audio) {
               console.log('🔊 ATTEMPTING TO PLAY AUDIO');
               Vibration.vibrate([0, 200, 100, 200]); // Vibrate to indicate audio
-              playAudioSequence(result.audio);
+              playAudioSequence(result.audio, result.notes);
             } else {
               console.log('❌ NO AUDIO IN RESPONSE');
               console.log('Full result:', JSON.stringify(result, null, 2));
@@ -134,7 +134,7 @@ export default function SimpleCamera() {
     }, 2000); // Scan every 2 seconds
   };
 
-  const playAudioSequence = async (initialAudio) => {
+  const playAudioSequence = async (initialAudio, notes) => {
     try {
       // Play initial announcement
       await playAudio(initialAudio);
@@ -151,20 +151,50 @@ export default function SimpleCamera() {
           if (result1.audio) {
             await playAudio(result1.audio);
             
-            // Wait 3 seconds, then play final message
+            // Wait 3 seconds, then play notes if available
             setTimeout(async () => {
               try {
-                const response2 = await fetch('http://localhost:8000/generate-audio', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ text: 'Click on the person in our app to see your memories with them.' })
-                });
-                const result2 = await response2.json();
-                if (result2.audio) {
-                  await playAudio(result2.audio);
+                if (notes && notes.trim()) {
+                  const response2 = await fetch('http://localhost:8000/generate-audio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: notes })
+                  });
+                  const result2 = await response2.json();
+                  if (result2.audio) {
+                    await playAudio(result2.audio);
+                  }
+                  
+                  // Wait 1 second after notes, then play final message
+                  setTimeout(async () => {
+                    try {
+                      const response3 = await fetch('http://localhost:8000/generate-audio', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: 'Click on the person in our app to see your memories with them.' })
+                      });
+                      const result3 = await response3.json();
+                      if (result3.audio) {
+                        await playAudio(result3.audio);
+                      }
+                    } catch (error) {
+                      console.error('Failed to play final message:', error);
+                    }
+                  }, 1000);
+                } else {
+                  // No notes, play final message directly
+                  const response3 = await fetch('http://localhost:8000/generate-audio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: 'Click on the person in our app to see your memories with them.' })
+                  });
+                  const result3 = await response3.json();
+                  if (result3.audio) {
+                    await playAudio(result3.audio);
+                  }
                 }
               } catch (error) {
-                console.error('Failed to play final message:', error);
+                console.error('Failed to play notes or final message:', error);
               }
             }, 3000);
           }

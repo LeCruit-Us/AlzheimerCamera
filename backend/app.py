@@ -100,7 +100,8 @@ def recognize_face():
             result = {
                 'matched': True,
                 'person': {'name': name},
-                'note': announcement
+                'note': announcement,
+                'notes': person_info.get('notes', '')
             }
             
             # Add audio if TTS was successful
