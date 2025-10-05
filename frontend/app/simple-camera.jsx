@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { api } from '../services/api';
 
 export default function SimpleCamera() {
@@ -15,6 +17,8 @@ export default function SimpleCamera() {
   const cameraRef = useRef(null);
   const router = useRouter();
   const scanInterval = useRef(null);
+  const pendingAudio = useRef(null);
+  const audioTimeout = useRef(null);
   
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -85,36 +89,49 @@ export default function SimpleCamera() {
           
           if (result.matched) {
             console.log('Match found!', result);
+            
+            // IMMEDIATELY stop scanning on first match
+            if (scanInterval.current) {
+              clearInterval(scanInterval.current);
+              scanInterval.current = null;
+              setScanning(false);
+            }
+            
             const message = `Found: ${result.person?.name || 'Unknown'}`;
             const note = result.note || 'No additional information';
             setLastResult(`✅ ${message}\n${note}`);
             
-            // Stop scanning when match is found
-            stopScanning();
-            
-            // Browser notification
-            if ('Notification' in window) {
-              if (Notification.permission === 'granted') {
-                new Notification('Person Recognized!', {
-                  body: `${message}\n${note}`,
-                  icon: '/favicon.ico'
-                });
-              } else if (Notification.permission !== 'denied') {
-                Notification.requestPermission().then(permission => {
-                  if (permission === 'granted') {
-                    new Notification('Person Recognized!', {
-                      body: `${message}\n${note}`,
-                      icon: '/favicon.ico'
-                    });
-                  }
-                });
+            // Store the latest audio and reset timeout
+            if (result.audio) {
+              pendingAudio.current = result.audio;
+              
+              // Clear existing timeout
+              if (audioTimeout.current) {
+                clearTimeout(audioTimeout.current);
               }
+              
+              // Set new timeout to play audio after delay
+              audioTimeout.current = setTimeout(async () => {
+                if (pendingAudio.current) {
+                  try {
+                    // Write base64 audio to temporary file
+                    const audioUri = `${FileSystem.documentDirectory}temp_audio.mp3`;
+                    await FileSystem.writeAsStringAsync(audioUri, pendingAudio.current, {
+                      encoding: FileSystem.EncodingType.Base64,
+                    });
+                    
+                    // Play audio using Expo AV
+                    const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
+                    await sound.playAsync();
+                    
+                    console.log('Final audio played successfully');
+                  } catch (e) {
+                    console.error('Audio processing failed:', e);
+                  }
+                  pendingAudio.current = null;
+                }
+              }, 1000); // Wait 1 second for any pending responses
             }
-            
-            // Fallback: Browser alert
-            setTimeout(() => {
-              window.alert(`Person Recognized!\n\n${message}\n\n${note}`);
-            }, 100);
             
             console.log('RECOGNITION SUCCESS:', message, note);
           } else {
@@ -135,7 +152,12 @@ export default function SimpleCamera() {
       clearInterval(scanInterval.current);
       scanInterval.current = null;
     }
+    if (audioTimeout.current) {
+      clearTimeout(audioTimeout.current);
+      audioTimeout.current = null;
+    }
     setLastResult('');
+    pendingAudio.current = null;
   };
 
   return (
@@ -167,13 +189,6 @@ export default function SimpleCamera() {
             {lastResult && (
               <View style={styles.resultContainer}>
                 <Text style={styles.resultText}>{lastResult}</Text>
-              </View>
-            )}
-            
-            {/* Web-compatible result display */}
-            {lastResult && (
-              <View style={styles.webResultContainer}>
-                <Text style={styles.webResultText}>{lastResult}</Text>
               </View>
             )}
             
@@ -310,25 +325,6 @@ const styles = StyleSheet.create({
   stopButton: {
     backgroundColor: 'rgba(255,77,77,0.8)'
   },
-  webResultContainer: {
-    position: 'fixed',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    borderRadius: 15,
-    padding: 20,
-    borderWidth: 3,
-    borderColor: '#00FF00',
-    zIndex: 1000,
-    maxWidth: '80%'
-  },
-  webResultText: {
-    color: '#00FF00',
-    fontSize: 20,
-    textAlign: 'center',
-    fontWeight: 'bold',
-    lineHeight: 28
-  },
+
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });
