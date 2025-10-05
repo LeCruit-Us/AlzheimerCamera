@@ -23,10 +23,11 @@ const PURPLE = "#7C4DFF";
 
 export default function AddPersonModal() {
   const params = useLocalSearchParams();
-  const [name, setName] = useState('');
-  const [role, setRole] = useState('');
-  const [age, setAge] = useState('');
-  const [notes, setNotes] = useState('');
+  const isEditMode = params.editMode === 'true';
+  const [name, setName] = useState(params.name as string || '');
+  const [role, setRole] = useState(params.relationship as string || '');
+  const [age, setAge] = useState(params.age as string || '');
+  const [notes, setNotes] = useState(params.notes as string || '');
   const [capturedImage, setCapturedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -80,7 +81,7 @@ export default function AddPersonModal() {
       Alert.alert('Error', 'Please enter a relationship');
       return;
     }
-    if (!capturedImage || !capturedImage.base64) {
+    if (!isEditMode && (!capturedImage || !capturedImage.base64)) {
       Alert.alert('Error', 'Please take a photo');
       return;
     }
@@ -88,18 +89,29 @@ export default function AddPersonModal() {
     setIsLoading(true);
     
     try {
-      const result = await api.addPerson(
-        capturedImage.base64,
-        name.trim(),
-        role.trim(),
-        age ? parseInt(age) : null,
-        notes.trim()
-      );
+      let result;
+      if (isEditMode) {
+        result = await api.editPerson(
+          params.personId as string,
+          name.trim(),
+          role.trim(),
+          age ? parseInt(age) : null,
+          notes.trim()
+        );
+      } else {
+        result = await api.addPerson(
+          capturedImage!.base64!,
+          name.trim(),
+          role.trim(),
+          age ? parseInt(age) : null,
+          notes.trim()
+        );
+      }
       
       if (result.success) {
         Alert.alert(
           'Success!', 
-          result.updated ? 
+          isEditMode ? 
             `${name}'s information has been updated!` :
             `${name} has been added successfully!`,
           [
@@ -107,17 +119,16 @@ export default function AddPersonModal() {
               text: 'View People',
               onPress: () => {
                 router.dismiss();
-                // Navigate to people tab
                 router.push('/(tabs)/people');
               }
             }
           ]
         );
       } else {
-        Alert.alert('Error', result.error || 'Failed to add person');
+        Alert.alert('Error', result.error || `Failed to ${isEditMode ? 'update' : 'add'} person`);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to add person. Please try again.');
+      Alert.alert('Error', `Failed to ${isEditMode ? 'update' : 'add'} person. Please try again.`);
     } finally {
       setIsLoading(false);
     }
@@ -137,7 +148,7 @@ export default function AddPersonModal() {
           <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Add New Person</Text>
+          <Text style={styles.title}>{isEditMode ? 'Edit Person' : 'Add New Person'}</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -147,7 +158,8 @@ export default function AddPersonModal() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-        {/* Camera Section */}
+        {/* Camera Section - Hide in edit mode */}
+        {!isEditMode && (
         <View style={styles.cameraSection}>
           <Text style={styles.sectionTitle}>Take Photo</Text>
           {capturedImage ? (
@@ -177,6 +189,7 @@ export default function AddPersonModal() {
             </TouchableOpacity>
           )}
         </View>
+        )}
 
         {/* Form Section */}
         <View style={styles.formSection}>
@@ -234,15 +247,15 @@ export default function AddPersonModal() {
             <TouchableOpacity 
               style={[
                 styles.submitButton,
-                (!name.trim() || !role || !capturedImage || isLoading) && styles.submitButtonDisabled
+                (!name.trim() || !role || (!isEditMode && !capturedImage) || isLoading) && styles.submitButtonDisabled
               ]}
               onPress={handleSubmit}
-              disabled={!name.trim() || !role || !capturedImage || isLoading}
+              disabled={!name.trim() || !role || (!isEditMode && !capturedImage) || isLoading}
             >
               {isLoading ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text style={styles.submitButtonText}>Add Person</Text>
+                <Text style={styles.submitButtonText}>{isEditMode ? 'Update Person' : 'Add Person'}</Text>
               )}
             </TouchableOpacity>
           </ScrollView>

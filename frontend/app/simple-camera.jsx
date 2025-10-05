@@ -111,36 +111,36 @@ export default function SimpleCamera() {
           zoom={zoom}
         >
           <View style={styles.overlay}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.backText}>←</Text>
-          </TouchableOpacity>
-          
-          <Text style={styles.instruction}>Point camera at a person's face and tap to scan</Text>
-          
-          {/* Zoom Level Indicator */}
-          {zoom > 0.05 && (
-            <View style={styles.zoomIndicator}>
-              <Text style={styles.zoomText}>{(1 + zoom * 9).toFixed(1)}x</Text>
-            </View>
-          )}
-          
-          <View style={styles.bottomControls}>
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#fff" />
-                <Text style={styles.loadingText}>Scanning...</Text>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backText}>←</Text>
+            </TouchableOpacity>
+            
+            <Text style={styles.instruction}>Point camera at a person's face and tap to scan</Text>
+            
+            {/* Zoom Level Indicator */}
+            {zoom > 0.05 && (
+              <View style={styles.zoomIndicator}>
+                <Text style={styles.zoomText}>{(1 + zoom * 9).toFixed(1)}x</Text>
               </View>
-            ) : (
-              <TouchableOpacity style={styles.scanButton} onPress={scanFace}>
-                <View style={styles.scanInner}>
-                  <Text style={styles.scanText}>SCAN</Text>
-                </View>
-              </TouchableOpacity>
             )}
-          </View>
+            
+            <View style={styles.bottomControls}>
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#fff" />
+                  <Text style={styles.loadingText}>Scanning...</Text>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.scanButton} onPress={scanFace}>
+                  <View style={styles.scanInner}>
+                    <Text style={styles.scanText}>SCAN</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </CameraView>
       </GestureDetector>

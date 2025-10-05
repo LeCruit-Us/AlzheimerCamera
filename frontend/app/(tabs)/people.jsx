@@ -4,7 +4,22 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { api } from "../../services/api";
 
-function PersonRow({ item }) {
+function PersonRow({ item, onDelete, onEdit }) {
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Person',
+      `Are you sure you want to delete ${item.name}? This will remove them from all records.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: () => onDelete(item.person_id, item.name)
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.row}>
       <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -12,8 +27,11 @@ function PersonRow({ item }) {
         <Text style={styles.name}>{item.name}</Text>
         <Text style={styles.relation}>{item.relation}</Text>
       </View>
-      <TouchableOpacity style={styles.editBtn}>
-        <Text style={{ fontSize: 16 }}>✎</Text>
+      <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(item)}>
+        <Text style={{ fontSize: 16 }}>✏️</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+        <Text style={{ fontSize: 16 }}>🗑️</Text>
       </TouchableOpacity>
     </View>
   );
@@ -39,8 +57,11 @@ export default function People() {
       if (response.reminders) {
         const formattedPeople = response.reminders.map((person, index) => ({
           id: index.toString(),
+          person_id: person.person_id,
           name: person.name,
           relation: person.relationship,
+          age: person.age,
+          notes: person.notes,
           avatar: person.image_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(person.name)}&background=7C4DFF&color=fff&size=200`
         }));
         console.log('Formatted people:', formattedPeople);
@@ -54,6 +75,34 @@ export default function People() {
     }
   };
 
+  const handleDeletePerson = async (personId, personName) => {
+    try {
+      const result = await api.deletePerson(personId);
+      if (result.success) {
+        Alert.alert('Success', `${personName} has been deleted`);
+        loadPeople();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to delete person');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete person');
+    }
+  };
+
+  const handleEditPerson = (person) => {
+    router.push({
+      pathname: '/add-person-modal',
+      params: { 
+        editMode: 'true',
+        personId: person.person_id,
+        name: person.name,
+        relationship: person.relation,
+        age: person.age || '',
+        notes: person.notes || ''
+      }
+    });
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
@@ -64,7 +113,9 @@ export default function People() {
           style={{ marginTop: 12 }}
           data={people}
           keyExtractor={(i) => i.id}
-          renderItem={({ item }) => <PersonRow item={item} />}
+          renderItem={({ item }) => (
+            <PersonRow item={item} onDelete={handleDeletePerson} onEdit={handleEditPerson} />
+          )}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           contentContainerStyle={{ paddingBottom: 24 }}
           refreshing={loading}
@@ -99,7 +150,8 @@ const styles = StyleSheet.create({
   avatar: { width: 56, height: 56, borderRadius: 14, marginRight: 12 },
   name: { fontSize: 18, fontWeight: "800", color: "#1C1B1F" },
   relation: { fontSize: 14, color: "#6B6B6B", marginTop: 2 },
-  editBtn: { width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: "#EFE7FF" },
+  editBtn: { width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: "#E7F3FF", marginRight: 8 },
+  deleteBtn: { width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: "#FFE7E7" },
   fab: { position: "absolute", right: 20, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#7C4DFF", alignItems: "center", justifyContent: "center", elevation: 5 },
   fabPlus: { color: "#FFF", fontSize: 28, lineHeight: 28, fontWeight: "800" },
 });

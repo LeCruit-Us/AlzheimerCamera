@@ -1,8 +1,24 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Switch, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
-function ReminderCard({ title, time, description, value, onValueChange, onDelete }) {
+function ReminderCard({ id, title, time, description, value, onValueChange, onDelete, onEdit }) {
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Reminder',
+      `Are you sure you want to delete "${title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: () => onDelete(id)
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.card}>
       <View style={styles.bell}><Text style={{ fontSize: 22 }}>🔔</Text></View>
@@ -13,39 +29,57 @@ function ReminderCard({ title, time, description, value, onValueChange, onDelete
       </View>
       <View style={styles.side}>
         <Switch value={value} onValueChange={onValueChange} trackColor={{ false: "#D6D6D6", true: "#CDBAFD" }} thumbColor={value ? "#7C4DFF" : "#f4f3f4"} />
-        <TouchableOpacity onPress={onDelete} style={styles.trash}><Text style={{ fontSize: 16 }}>🗑️</Text></TouchableOpacity>
+        <View style={styles.buttons}>
+          <TouchableOpacity onPress={() => onEdit(id, title, time, description)} style={styles.editBtn}><Text style={{ fontSize: 14 }}>✏️</Text></TouchableOpacity>
+          <TouchableOpacity onPress={handleDelete} style={styles.trash}><Text style={{ fontSize: 14 }}>🗑️</Text></TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
 
 export default function Reminders() {
-  const [medOn, setMedOn] = useState(true);
-  const [callOn, setCallOn] = useState(false);
+  const router = useRouter();
+  const [reminders, setReminders] = useState([
+    { id: '1', title: 'Take morning medication', time: '08:00', description: 'Blood pressure medication', enabled: true },
+    { id: '2', title: 'Call doctor', time: '15:00', description: 'Schedule follow-up appointment', enabled: false }
+  ]);
+
+  const handleToggle = (id, value) => {
+    setReminders(prev => prev.map(r => r.id === id ? { ...r, enabled: value } : r));
+  };
+
+  const handleDelete = (id) => {
+    setReminders(prev => prev.filter(r => r.id !== id));
+    Alert.alert('Success', 'Reminder deleted');
+  };
+
+  const handleEdit = (id, title, time, description) => {
+    router.push({
+      pathname: '/edit-reminder-modal',
+      params: { id, title, time, description }
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <Text style={styles.h1}>Reminders</Text>
-        <Text style={styles.sub}>2 reminders set</Text>
+        <Text style={styles.sub}>{reminders.length} reminders set</Text>
 
-        <ReminderCard
-          title="Take morning medication"
-          time="08:00"
-          description="Blood pressure medication"
-          value={medOn}
-          onValueChange={setMedOn}
-          onDelete={() => {}}
-        />
-
-        <ReminderCard
-          title="Call doctor"
-          time="15:00"
-          description="Schedule follow-up appointment"
-          value={callOn}
-          onValueChange={setCallOn}
-          onDelete={() => {}}
-        />
+        {reminders.map(reminder => (
+          <ReminderCard
+            key={reminder.id}
+            id={reminder.id}
+            title={reminder.title}
+            time={reminder.time}
+            description={reminder.description}
+            value={reminder.enabled}
+            onValueChange={(value) => handleToggle(reminder.id, value)}
+            onDelete={handleDelete}
+            onEdit={handleEdit}
+          />
+        ))}
 
         <TouchableOpacity style={styles.fab}><Text style={styles.fabPlus}>＋</Text></TouchableOpacity>
       </View>
@@ -64,7 +98,9 @@ const styles = StyleSheet.create({
   time: { fontSize: 16, color: "#5C49C9", marginTop: 4, fontWeight: "700" },
   desc: { fontSize: 14, color: "#6B6B6B", marginTop: 6, lineHeight: 20 },
   side: { alignItems: "center", justifyContent: "space-between", height: 64, marginLeft: 10 },
-  trash: { marginTop: 8 },
+  buttons: { flexDirection: "row", marginTop: 8 },
+  editBtn: { marginRight: 8 },
+  trash: {},
   fab: { position: "absolute", right: 20, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#7C4DFF", alignItems: "center", justifyContent: "center", elevation: 5 },
   fabPlus: { color: "#FFF", fontSize: 28, lineHeight: 28, fontWeight: "800" },
 });

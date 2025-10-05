@@ -277,6 +277,7 @@ def get_reminders():
                     print(f"Error generating presigned URL: {e}")
             
             reminders.append({
+                'person_id': person.get('person_id'),
                 'name': person.get('name'),
                 'relationship': person.get('relationship'),
                 'age': person.get('age'),
@@ -287,6 +288,78 @@ def get_reminders():
         
         return jsonify({'reminders': reminders})
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/edit_person/<person_id>', methods=['PUT'])
+def edit_person(person_id):
+    """Edit a person's information"""
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        relationship = data.get('relationship')
+        age = data.get('age')
+        notes = data.get('notes', '')
+        
+        if not name or not relationship:
+            return jsonify({'error': 'Name and relationship required'}), 400
+        
+        # Update DynamoDB
+        table.update_item(
+            Key={'person_id': person_id},
+            UpdateExpression='SET #n = :name, relationship = :rel, age = :age, notes = :notes, updated_at = :updated',
+            ExpressionAttributeNames={'#n': 'name'},
+            ExpressionAttributeValues={
+                ':name': name,
+                ':rel': relationship,
+                ':age': age,
+                ':notes': notes,
+                ':updated': datetime.utcnow().isoformat()
+            }
+        )
+        
+        return jsonify({'success': True, 'message': 'Person updated successfully'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/delete_person/<person_id>', methods=['DELETE'])
+def delete_person(person_id):
+    """Delete a person from all AWS services"""
+    print(f"[DELETE_PERSON] Request to delete person_id: {person_id}")
+    try:
+        # Get person info first
+        db_response = table.get_item(Key={'person_id': person_id})
+        person_info = db_response.get('Item')
+        
+        if not person_info:
+            return jsonify({'error': 'Person not found'}), 404
+        
+        # Delete from Rekognition (get face_id first)
+        face_id = person_info.get('face_id')
+        if face_id:
+            try:
+                rekognition.delete_faces(
+                    CollectionId=COLLECTION_ID,
+                    FaceIds=[face_id]
+                )
+            except Exception as e:
+                print(f"Error deleting from Rekognition: {e}")
+        
+        # Delete from S3
+        s3_key = person_info.get('s3_key')
+        if s3_key:
+            try:
+                s3.delete_object(Bucket=BUCKET_NAME, Key=s3_key)
+            except Exception as e:
+                print(f"Error deleting from S3: {e}")
+        
+        # Delete from DynamoDB
+        table.delete_item(Key={'person_id': person_id})
+        
+        return jsonify({'success': True, 'message': 'Person deleted successfully'})
+        
+    except Exception as e:
+        print(f"Delete person error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])

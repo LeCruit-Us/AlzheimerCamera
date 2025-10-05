@@ -40,6 +40,34 @@ export const api = {
     return response.json();
   },
 
+  // Edit a person
+  async editPerson(personId, name, relationship, age, notes) {
+    const response = await fetch(`${API_BASE_URL}/edit_person/${personId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name,
+        relationship,
+        age: parseInt(age) || null,
+        notes
+      })
+    });
+    return response.json();
+  },
+
+  // Delete a person
+  async deletePerson(personId) {
+    const response = await fetch(`${API_BASE_URL}/delete_person/${personId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    return response.json();
+  },
+
   // Health check
   async healthCheck() {
     const response = await fetch(`${API_BASE_URL}/health`);
