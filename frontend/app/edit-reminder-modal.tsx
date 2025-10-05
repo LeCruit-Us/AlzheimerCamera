@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
+import { addReminder as addStoredReminder, updateReminder as updateStoredReminder } from '../state/remindersStore';
+
 const PURPLE = "#7C4DFF";
 
 export default function EditReminderModal() {
@@ -24,7 +26,7 @@ export default function EditReminderModal() {
   const [time, setTime] = useState(params.time as string || '');
   const [description, setDescription] = useState(params.description as string || '');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!title.trim()) {
       Alert.alert('Error', 'Please enter a title');
       return;
@@ -32,6 +34,29 @@ export default function EditReminderModal() {
     if (!time.trim()) {
       Alert.alert('Error', 'Please enter a time');
       return;
+    }
+
+    const trimmedTime = time.trim();
+    const isValidTime = /^([01]\d|2[0-3]):([0-5]\d)$/.test(trimmedTime);
+    if (!isValidTime) {
+      Alert.alert('Error', 'Time must be in HH:MM (24-hour) format.');
+      return;
+    }
+
+    const payload = {
+      title: title.trim(),
+      time: trimmedTime,
+      description: (description || '').trim(),
+    };
+
+    if (isEditMode) {
+      await updateStoredReminder(params.id as string, payload);
+    } else {
+      await addStoredReminder({
+        id: Date.now().toString(),
+        enabled: true,
+        ...payload,
+      });
     }
 
     const message = isEditMode ? 'Reminder updated successfully' : 'Reminder added successfully';
