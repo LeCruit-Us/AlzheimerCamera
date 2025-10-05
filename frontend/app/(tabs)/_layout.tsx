@@ -62,7 +62,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="people"
         options={{
-          title: "People",
+          title: "Memories",
           tabBarIcon: ({ focused }) => <TabIcon focused={focused} Icon={PeopleOutline} />,
         }}
       />
@@ -83,3 +83,5 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+

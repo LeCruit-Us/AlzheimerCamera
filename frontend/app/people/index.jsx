@@ -14,7 +14,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useFocusEffect } from "expo-router";
 import { api } from "../../services/api";
 
-// THEME (from the first styling)
 const BG = "#F6F2FF";            // soft lilac
 const CARD = "#FFFFFF";          // card surface
 const PURPLE = "#7C4DFF";        // brand purple
@@ -85,35 +84,47 @@ export default function People() {
     }
   };
 
-  // Open memories screen for the person
   const handleOpenPerson = (person) => {
     router.push({
       pathname: "/memories/[personId]",
-      params: { personId: person.person_id, name: person.name },
+      params: {
+        personId: person.person_id,
+        name: person.name,
+        relationship: person.relation ?? "",
+        age: person.age ?? "",
+        notes: person.notes ?? "",
+      },
     });
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
-        <Text style={styles.h1}>Memories</Text>
+        {/* Header */}
+        <Text style={styles.h1}>People Stored 1 1</Text>
         <Text style={styles.sub}>
           <Text style={{ fontWeight: "800", color: TEXT_PRIMARY }}>{people.length}</Text>{" "}
           people recognized
         </Text>
 
+        {/* List */}
         <FlatList
           style={{ marginTop: 6 }}
           data={people}
           keyExtractor={(i) => i.id}
-          renderItem={({ item }) => <PersonRow item={item} onOpen={handleOpenPerson} />}
+          renderItem={({ item }) => (
+            <PersonRow
+              item={item}
+              onOpen={handleOpenPerson}
+            />
+          )}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           contentContainerStyle={{ paddingBottom: 110, paddingTop: 6 }}
           refreshing={loading}
           onRefresh={loadPeople}
         />
 
-        {/* FABs (same behavior, styled like the first screen) */}
+        {/* FABs */}
         <TouchableOpacity style={[styles.fab, styles.addFab]} onPress={() => router.push("/add-person-modal")}>
           <Text style={styles.fabText}>＋</Text>
         </TouchableOpacity>
@@ -127,11 +138,9 @@ export default function People() {
 }
 
 const styles = StyleSheet.create({
-  // background + container spacing
   safe: { flex: 1, backgroundColor: BG },
   container: { flex: 1, paddingHorizontal: 20 },
 
-  // header styles (from first styling)
   h1: {
     fontSize: 34,
     fontWeight: "900",
@@ -145,11 +154,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
 
-  // Gradient ring card
+  // Row card with gradient ring + soft shadow
   rowWrap: { marginVertical: 8 },
   ring: {
     borderRadius: 22,
-    padding: 1.5, // thin gradient ring
+    padding: 1.5,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
