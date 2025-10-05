@@ -1,7 +1,19 @@
+<<<<<<< HEAD
 import React, { useCallback, useEffect, useState } from "react";
+=======
+import React, { useCallback, useEffect, useRef, useState } from "react";
+>>>>>>> main
 import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert, FlatList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import {
+  getReminders as getStoredReminders,
+  subscribe as subscribeToReminders,
+  updateReminder as updateStoredReminder,
+  deleteReminder as deleteStoredReminder,
+  normalizeTimeString,
+} from "../../state/remindersStore";
 
 import {
   getReminders as getStoredReminders,
@@ -49,12 +61,18 @@ export default function Reminders() {
   const router = useRouter();
   const [reminders, setReminders] = useState(getStoredReminders());
   const [refreshing, setRefreshing] = useState(false);
+<<<<<<< HEAD
+=======
+  const remindersRef = useRef(reminders);
+  const triggeredRef = useRef({ date: new Date().toDateString(), ids: new Set() });
+>>>>>>> main
 
   useEffect(() => {
     const unsubscribe = subscribeToReminders(setReminders);
     return unsubscribe;
   }, []);
 
+<<<<<<< HEAD
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     setReminders(getStoredReminders());
@@ -67,6 +85,43 @@ export default function Reminders() {
 
   const handleDelete = (id) => {
     deleteStoredReminder(id);
+=======
+  useEffect(() => {
+    remindersRef.current = reminders;
+  }, [reminders]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      const currentTime = now.toTimeString().slice(0, 5);
+      const currentDate = now.toDateString();
+
+      if (triggeredRef.current.date !== currentDate) {
+        triggeredRef.current = { date: currentDate, ids: new Set() };
+      }
+
+      remindersRef.current.forEach((reminder) => {
+        if (!reminder.enabled) return;
+        const { time24 } = normalizeTimeString(reminder.time24 || reminder.time);
+        if (time24 !== currentTime) return;
+
+        if (triggeredRef.current.ids.has(reminder.id)) return;
+        triggeredRef.current.ids.add(reminder.id);
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggle = (id, value) => {
+    updateStoredReminder(id, { enabled: value }).catch(() => {});
+  };
+
+  const handleDelete = (id) => {
+    deleteStoredReminder(id).catch(() => {});
+>>>>>>> main
     Alert.alert('Success', 'Reminder deleted');
   };
 
@@ -77,6 +132,15 @@ export default function Reminders() {
     });
   };
 
+<<<<<<< HEAD
+=======
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setReminders(getStoredReminders());
+    setRefreshing(false);
+  }, []);
+
+>>>>>>> main
   const renderReminder = ({ item }) => (
     <ReminderCard
       id={item.id}
