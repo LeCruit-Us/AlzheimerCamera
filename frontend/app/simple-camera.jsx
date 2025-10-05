@@ -117,7 +117,7 @@ export default function SimpleCamera() {
             if (result.audio) {
               console.log('🔊 ATTEMPTING TO PLAY AUDIO');
               Vibration.vibrate([0, 200, 100, 200]); // Vibrate to indicate audio
-              playAudioSequence(result.audio, result.notes);
+              playAudioSequence(result.audio, result.notes, result.person?.name);
             } else {
               console.log('❌ NO AUDIO IN RESPONSE');
               console.log('Full result:', JSON.stringify(result, null, 2));
@@ -134,7 +134,7 @@ export default function SimpleCamera() {
     }, 2000); // Scan every 2 seconds
   };
 
-  const playAudioSequence = async (initialAudio, notes) => {
+  const playAudioSequence = async (initialAudio, notes, personName) => {
     try {
       // Play initial announcement
       await playAudio(initialAudio);
@@ -168,10 +168,13 @@ export default function SimpleCamera() {
                   // Wait 1 second after notes, then play final message
                   setTimeout(async () => {
                     try {
+                      const finalMessage = personName ? 
+                        `Open the Remember Me app, click on memories, then click on ${personName} to see more of your memories with them.` :
+                        'Open the Remember Me app, click on memories, then click on the person to see more of your memories with them.';
                       const response3 = await fetch('http://localhost:8000/generate-audio', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: 'Click on the person in our app to see your memories with them.' })
+                        body: JSON.stringify({ text: finalMessage })
                       });
                       const result3 = await response3.json();
                       if (result3.audio) {
@@ -183,10 +186,13 @@ export default function SimpleCamera() {
                   }, 1000);
                 } else {
                   // No notes, play final message directly
+                  const finalMessage = personName ? 
+                    `Open the Remember Me app, click on memories, then click on ${personName} to see more of your memories with them.` :
+                    'Open the Remember Me app, click on memories, then click on the person to see more of your memories with them.';
                   const response3 = await fetch('http://localhost:8000/generate-audio', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: 'Click on the person in our app to see your memories with them.' })
+                    body: JSON.stringify({ text: finalMessage })
                   });
                   const result3 = await response3.json();
                   if (result3.audio) {
@@ -365,7 +371,7 @@ export default function SimpleCamera() {
                     const result = await response.json();
                     if (result.audio) {
                       console.log('Got test audio, playing sequence...');
-                      playAudioSequence(result.audio);
+                      playAudioSequence(result.audio, 'Test notes', 'John Smith');
                     } else {
                       console.log('No audio in test response');
                     }
