@@ -3,8 +3,9 @@ import {
   View, Text, StyleSheet, Image, FlatList, Dimensions,
   TouchableOpacity, ActivityIndicator, Animated, Modal, Pressable,
 } from "react-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useFonts } from "expo-font";
+import { api } from "../../services/api";
 
 const { width, height } = Dimensions.get("window");
 const HERO_HEIGHT = Math.round(height * 0.5);
@@ -37,16 +38,30 @@ export default function PersonMemories() {
     if (viewableItems?.length) setViewerIndex(viewableItems[0].index ?? 0);
   });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const imagesOnly = (await mockFetchMedia()).filter(m => m.type === "image");
-        setMedia(imagesOnly);
-      } finally {
-        setLoading(false);
+  const loadMedia = async () => {
+    try {
+      setLoading(true);
+      const result = await api.getPersonMedia(params.personId);
+      if (result.media) {
+        setMedia(result.media.filter(m => m.type === "image"));
+      } else {
+        setMedia([]);
       }
-    })();
-  }, [params.personId]);
+    } catch (error) {
+      console.error("Error loading media:", error);
+      setMedia([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (params.personId) {
+        loadMedia();
+      }
+    }, [params.personId])
+  );
 
   const goTo = (nextIndex) => {
     Animated.timing(fade, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
@@ -86,7 +101,6 @@ export default function PersonMemories() {
     if (!current) return null;
     return (
       <Animated.View style={[styles.hero, { opacity: fade }]}>
-        {/* Overlaid header row */}
         <View style={styles.heroHeaderRow}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -96,7 +110,6 @@ export default function PersonMemories() {
             <Text style={styles.backTxt}>‹</Text>
           </TouchableOpacity>
 
-          {/* centered title */}
           <View pointerEvents="none" style={styles.heroHeaderCenterInRow}>
             <Text
               numberOfLines={1}
@@ -109,7 +122,6 @@ export default function PersonMemories() {
             </Text>
           </View>
 
-          {/* UPDATED: forward relationship/age/notes to edit-person */}
           <TouchableOpacity
             onPress={() =>
               router.push({
@@ -130,7 +142,6 @@ export default function PersonMemories() {
           </TouchableOpacity>
         </View>
 
-        {/* Tap hero to open viewer */}
         <Pressable onPress={() => openViewerAt(index)} style={styles.fill}>
           <Image source={{ uri: current.uri }} style={styles.fill} resizeMode="cover" />
         </Pressable>
@@ -185,10 +196,20 @@ export default function PersonMemories() {
           removeClippedSubviews
           initialNumToRender={24}
           windowSize={11}
+          refreshing={loading}
+          onRefresh={loadMedia}
         />
+        
+        {/* Camera FAB */}
+        <TouchableOpacity 
+          style={styles.cameraFab}
+          onPress={() => router.push('/simple-camera')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.cameraFabIcon}>📷</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Full-screen viewer */}
       <Modal visible={viewerVisible} animationType="fade" onRequestClose={() => setViewerVisible(false)}>
         <View style={styles.viewerRoot}>
           <View style={styles.viewerTopBar}>
@@ -218,21 +239,6 @@ export default function PersonMemories() {
       </Modal>
     </>
   );
-}
-
-/** Dummy media — replace with your API results (images only) */
-async function mockFetchMedia() {
-  return [
-    { id: "1", type: "image", uri: "https://picsum.photos/seed/1/1200/800" },
-    { id: "2", type: "image", uri: "https://picsum.photos/seed/2/1200/800" },
-    { id: "3", type: "image", uri: "https://picsum.photos/seed/3/1200/800" },
-    { id: "4", type: "image", uri: "https://picsum.photos/seed/4/1200/800" },
-    { id: "5", type: "image", uri: "https://picsum.photos/seed/5/1200/800" },
-    { id: "6", type: "image", uri: "https://picsum.photos/seed/6/1200/800" },
-    { id: "7", type: "image", uri: "https://picsum.photos/seed/7/1200/800" },
-    { id: "8", type: "image", uri: "https://picsum.photos/seed/8/1200/800" },
-    { id: "9", type: "image", uri: "https://picsum.photos/seed/9/1200/800" },
-  ];
 }
 
 const styles = StyleSheet.create({
@@ -266,46 +272,99 @@ const styles = StyleSheet.create({
   backTxt: { color: "#fff", fontSize: 22, fontWeight: "800", lineHeight: 22 },
 
   heroHeaderTitle: {
-    color: "white",
-    fontSize: 30,
-    maxWidth: width * 0.7,
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "800",
     textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
-  heroHeaderTitleCourgette: { fontFamily: "Courgette" },
+  heroHeaderTitleCourgette: {
+    fontFamily: "Courgette",
+  },
 
   editBtn: {
-    paddingHorizontal: 12,
-    height: 32,
-    borderRadius: 16,
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: "rgba(0,0,0,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
   },
-  editTxt: { color: "#fff", fontSize: 14, fontWeight: "700" },
-
-  gridContent: { paddingHorizontal: SPACING, paddingTop: 6, paddingBottom: 24 },
-  thumbWrap: { width: CELL, height: CELL, margin: SPACING, overflow: "hidden", backgroundColor: "#eee" },
-  thumbSelected: { borderWidth: 1, borderColor: "#7C4DFF" },
-  thumb: { width: "100%", height: "100%" },
+  editTxt: { color: "#fff", fontSize: 14, fontWeight: "600" },
 
   center: { alignItems: "center", justifyContent: "center" },
 
-  viewerRoot: { flex: 1, backgroundColor: "black" },
+  thumbWrap: {
+    width: CELL,
+    height: CELL,
+    margin: SPACING / 2,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  thumbSelected: {
+    borderWidth: 2,
+    borderColor: "#7C4DFF",
+  },
+  thumb: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#ddd",
+  },
+
+  gridContent: {
+    padding: SPACING / 2,
+    paddingBottom: 100,
+  },
+
+  viewerRoot: {
+    flex: 1,
+    backgroundColor: "black",
+  },
   viewerTopBar: {
     position: "absolute",
-    top: 82,
-    left: 0, right: 0,
-    height: 40, zIndex: 10, paddingHorizontal: 12,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: "transparent",
+    top: 60,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    height: 40,
   },
   viewerCounter: {
-    color: "#fff", fontSize: 16, fontWeight: "700",
-    textShadowColor: "rgba(0,0,0,0.45)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
   },
-  viewerCloseBtn: { padding: 6, backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 18 },
-  viewerCloseTxt: { color: "#fff", fontSize: 20, fontWeight: "800" },
+  viewerCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewerCloseTxt: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  
+  cameraFab: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#7C4DFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 999,
+  },
+  cameraFabIcon: {
+    fontSize: 24,
+  },
 });

@@ -44,7 +44,7 @@ export default function Home() {
           colors={["#A686FF", "#6C5CE7"]}
           title="Scan Face"
           subtitle="Point camera at someone to learn who they are"
-          onPress={goToPeopleTab}
+          onPress={() => router.push('/simple-camera')}
           icon="📷"
         />
 
@@ -58,6 +58,15 @@ export default function Home() {
           </View>
           <Text style={styles.cardTitle}>Reminders</Text>
           <Text style={styles.cardSubtitle}>Important tasks and medication times</Text>
+        </TouchableOpacity>
+        
+        {/* Floating Camera Button */}
+        <TouchableOpacity 
+          style={styles.cameraFab}
+          onPress={() => router.push('/simple-camera')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.cameraFabIcon}>📷</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -83,4 +92,25 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 20, fontWeight: "800", color: "#1C1B1F" },
   cardSubtitle: { fontSize: 14, color: "#2E2E2E", opacity: 0.85, marginTop: 6, lineHeight: 20 },
+  
+  cameraFab: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#7C4DFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10,
+    zIndex: 999,
+  },
+  cameraFabIcon: {
+    fontSize: 28,
+  },
 });

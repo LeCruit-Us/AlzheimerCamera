@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Vibration } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -23,8 +23,17 @@ export default function SimpleCamera() {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   
-  // Cleanup on unmount
+  // Initialize audio and cleanup on unmount
   useEffect(() => {
+    // Initialize audio session
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: false,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    }).catch(console.error);
+    
     return () => {
       if (scanInterval.current) {
         clearInterval(scanInterval.current);
@@ -101,39 +110,18 @@ export default function SimpleCamera() {
             const note = result.note || 'No additional information';
             setLastResult(`✅ ${message}\n${note}`);
             
-            // Store the latest audio and reset timeout
-            if (result.audio) {
-              pendingAudio.current = result.audio;
-              
-              // Clear existing timeout
-              if (audioTimeout.current) {
-                clearTimeout(audioTimeout.current);
-              }
-              
-              // Set new timeout to play audio after delay
-              audioTimeout.current = setTimeout(async () => {
-                if (pendingAudio.current) {
-                  try {
-                    // Write base64 audio to temporary file
-                    const audioUri = `${FileSystem.documentDirectory}temp_audio.mp3`;
-                    await FileSystem.writeAsStringAsync(audioUri, pendingAudio.current, {
-                      encoding: FileSystem.EncodingType.Base64,
-                    });
-                    
-                    // Play audio using Expo AV
-                    const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
-                    await sound.playAsync();
-                    
-                    console.log('Final audio played successfully');
-                  } catch (e) {
-                    console.error('Audio processing failed:', e);
-                  }
-                  pendingAudio.current = null;
-                }
-              }, 1000); // Wait 1 second for any pending responses
-            }
-            
             console.log('RECOGNITION SUCCESS:', message, note);
+            console.log('Audio in response:', !!result.audio, result.audio ? result.audio.length : 0);
+            
+            // Play audio if available
+            if (result.audio) {
+              console.log('🔊 ATTEMPTING TO PLAY AUDIO');
+              Vibration.vibrate([0, 200, 100, 200]); // Vibrate to indicate audio
+              playAudio(result.audio);
+            } else {
+              console.log('❌ NO AUDIO IN RESPONSE');
+              console.log('Full result:', JSON.stringify(result, null, 2));
+            }
           } else {
             console.log('No match found', result);
             setLastResult('❌ No person recognized');
@@ -144,6 +132,92 @@ export default function SimpleCamera() {
         }
       }
     }, 2000); // Scan every 2 seconds
+  };
+
+  const playAudio = async (audioBase64) => {
+    try {
+      console.log('🔊 Starting audio playback...');
+      console.log('Audio data length:', audioBase64.length);
+      
+      if (!audioBase64 || audioBase64.length === 0) {
+        throw new Error('No audio data provided');
+      }
+      
+      // Set audio mode for playback
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        staysActiveInBackground: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+      
+      // Create data URI for direct playback
+      const audioUri = `data:audio/mp3;base64,${audioBase64}`;
+      
+      console.log('Creating sound from data URI...');
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { 
+          shouldPlay: true,
+          volume: 1.0,
+          rate: 1.0,
+          shouldCorrectPitch: true
+        }
+      );
+      
+      console.log('Sound created and playing...');
+      
+      // Set up status listener
+      sound.setOnPlaybackStatusUpdate((status) => {
+        console.log('Playback status:', {
+          isLoaded: status.isLoaded,
+          isPlaying: status.isPlaying,
+          didJustFinish: status.didJustFinish,
+          error: status.error
+        });
+        if (status.didJustFinish) {
+          console.log('Audio finished, cleaning up...');
+          sound.unloadAsync();
+        }
+        if (status.error) {
+          console.error('Audio playback error:', status.error);
+        }
+      });
+      
+      console.log('✅ Audio playback initiated!');
+      
+    } catch (error) {
+      console.error('❌ Audio playback failed:', error);
+      console.error('Error details:', error.message);
+      
+      // Fallback: Try file-based approach
+      try {
+        console.log('Trying file-based fallback...');
+        const timestamp = Date.now();
+        const audioUri = `${FileSystem.documentDirectory}audio_${timestamp}.mp3`;
+        
+        await FileSystem.writeAsStringAsync(audioUri, audioBase64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audioUri },
+          { shouldPlay: true, volume: 1.0 }
+        );
+        
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.didJustFinish) {
+            sound.unloadAsync();
+            FileSystem.deleteAsync(audioUri, { idempotent: true });
+          }
+        });
+        
+        console.log('✅ Fallback audio playback started!');
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+      }
+    }
   };
 
   const stopScanning = () => {
@@ -207,6 +281,28 @@ export default function SimpleCamera() {
                   </View>
                 </TouchableOpacity>
               )}
+              
+              {/* Test Audio Button */}
+              <TouchableOpacity 
+                style={styles.testButton} 
+                onPress={async () => {
+                  console.log('Testing audio...');
+                  try {
+                    const response = await fetch('http://localhost:8000/test-tts');
+                    const result = await response.json();
+                    if (result.audio) {
+                      console.log('Got test audio, playing...');
+                      playAudio(result.audio);
+                    } else {
+                      console.log('No audio in test response');
+                    }
+                  } catch (error) {
+                    console.error('Test audio failed:', error);
+                  }
+                }}
+              >
+                <Text style={styles.testText}>TEST AUDIO</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </CameraView>
@@ -324,6 +420,22 @@ const styles = StyleSheet.create({
   },
   stopButton: {
     backgroundColor: 'rgba(255,77,77,0.8)'
+  },
+  
+  testButton: {
+    marginTop: 20,
+    backgroundColor: 'rgba(0,255,0,0.8)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#fff'
+  },
+  
+  testText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold'
   },
 
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
