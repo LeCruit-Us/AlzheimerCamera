@@ -15,6 +15,11 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
+import {
+  addReminder as addStoredReminder,
+  updateReminder as updateStoredReminder,
+} from '../state/remindersStore';
+
 const PURPLE = "#7C4DFF";
 
 export default function EditReminderModal() {
@@ -24,7 +29,7 @@ export default function EditReminderModal() {
   const [time, setTime] = useState(params.time as string || '');
   const [description, setDescription] = useState(params.description as string || '');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!title.trim()) {
       Alert.alert('Error', 'Please enter a title');
       return;
@@ -33,12 +38,35 @@ export default function EditReminderModal() {
       Alert.alert('Error', 'Please enter a time');
       return;
     }
+    const timeValue = time.trim();
+    const isValidTime = /^([01]\d|2[0-3]):([0-5]\d)$/.test(timeValue);
+    if (!isValidTime) {
+      Alert.alert('Error', 'Time must be in HH:MM (24-hour) format.');
+      return;
+    }
+
+    const reminderPayload = {
+      title: title.trim(),
+      time: timeValue,
+      description: description.trim(),
+    };
+
+    if (isEditMode) {
+      updateStoredReminder(params.id as string, reminderPayload);
+    } else {
+      addStoredReminder({
+        id: Date.now().toString(),
+        enabled: true,
+        ...reminderPayload,
+      });
+    }
 
     const message = isEditMode ? 'Reminder updated successfully' : 'Reminder added successfully';
     Alert.alert('Success', message, [
       { text: 'OK', onPress: () => router.dismiss() }
     ]);
   };
+
 
   const handleCancel = () => {
     router.dismiss();

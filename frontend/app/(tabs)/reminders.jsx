@@ -1,7 +1,14 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert, FlatList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+
+import {
+  getReminders as getStoredReminders,
+  subscribe as subscribeToReminders,
+  updateReminder as updateStoredReminder,
+  deleteReminder as deleteStoredReminder,
+} from "../../state/remindersStore";
 
 function ReminderCard({ id, title, time, description, value, onValueChange, onDelete, onEdit }) {
   const handleDelete = () => {
@@ -40,17 +47,26 @@ function ReminderCard({ id, title, time, description, value, onValueChange, onDe
 
 export default function Reminders() {
   const router = useRouter();
-  const [reminders, setReminders] = useState([
-    { id: '1', title: 'Take morning medication', time: '08:00', description: 'Blood pressure medication', enabled: true },
-    { id: '2', title: 'Call doctor', time: '15:00', description: 'Schedule follow-up appointment', enabled: false }
-  ]);
+  const [reminders, setReminders] = useState(getStoredReminders());
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToReminders(setReminders);
+    return unsubscribe;
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setReminders(getStoredReminders());
+    setRefreshing(false);
+  }, []);
 
   const handleToggle = (id, value) => {
-    setReminders(prev => prev.map(r => r.id === id ? { ...r, enabled: value } : r));
+    updateStoredReminder(id, { enabled: value });
   };
 
   const handleDelete = (id) => {
-    setReminders(prev => prev.filter(r => r.id !== id));
+    deleteStoredReminder(id);
     Alert.alert('Success', 'Reminder deleted');
   };
 
@@ -61,25 +77,39 @@ export default function Reminders() {
     });
   };
 
+  const renderReminder = ({ item }) => (
+    <ReminderCard
+      id={item.id}
+      title={item.title}
+      time={item.time}
+      description={item.description}
+      value={item.enabled}
+      onValueChange={(value) => handleToggle(item.id, value)}
+      onDelete={handleDelete}
+      onEdit={handleEdit}
+    />
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <Text style={styles.h1}>Reminders</Text>
         <Text style={styles.sub}>{reminders.length} reminders set</Text>
 
-        {reminders.map(reminder => (
-          <ReminderCard
-            key={reminder.id}
-            id={reminder.id}
-            title={reminder.title}
-            time={reminder.time}
-            description={reminder.description}
-            value={reminder.enabled}
-            onValueChange={(value) => handleToggle(reminder.id, value)}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-          />
-        ))}
+        <FlatList
+          data={reminders}
+          keyExtractor={(item) => item.id}
+          renderItem={renderReminder}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          contentContainerStyle={{ paddingBottom: 110, paddingTop: 6 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#7C4DFF"
+            />
+          }
+        />
 
         <TouchableOpacity 
           style={styles.fab}
@@ -100,7 +130,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 8, paddingHorizontal: 20 },
   h1: { fontSize: 28, fontWeight: "800", color: "#1C1B1F" },
   sub: { color: "#6B6B6B", marginTop: 6, marginBottom: 12, fontSize: 16 },
-  card: { flexDirection: "row", padding: 16, borderRadius: 18, backgroundColor: "#FFF", alignItems: "center", marginTop: 12, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
+  card: { flexDirection: "row", padding: 16, borderRadius: 18, backgroundColor: "#FFF", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
   bell: { width: 48, height: 48, borderRadius: 12, backgroundColor: "#E9E0FF", alignItems: "center", justifyContent: "center", marginRight: 12 },
   title: { fontSize: 18, fontWeight: "800", color: "#1C1B1F" },
   time: { fontSize: 16, color: "#5C49C9", marginTop: 4, fontWeight: "700" },
