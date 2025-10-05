@@ -1,21 +1,36 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { api } from '../services/api';
 
 export default function SimpleCamera() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [zoom, setZoom] = useState(0);
+  const [lastResult, setLastResult] = useState('');
   const cameraRef = useRef(null);
   const router = useRouter();
+  const scanInterval = useRef(null);
+  const pendingAudio = useRef(null);
+  const audioTimeout = useRef(null);
   
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (scanInterval.current) {
+        clearInterval(scanInterval.current);
+      }
+    };
+  }, []);
   
   const updateZoom = (newZoom) => {
     const clampedZoom = Math.max(0, Math.min(1, newZoom));
@@ -56,50 +71,93 @@ export default function SimpleCamera() {
     );
   }
 
-  const scanFace = async () => {
-    if (cameraRef.current && !loading) {
-      setLoading(true);
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          base64: true,
-          quality: 0.8,
-        });
+  const startScanning = () => {
+    setScanning(true);
+    scanInterval.current = setInterval(async () => {
+      if (cameraRef.current) {
+        try {
+          console.log('Taking photo...');
+          const photo = await cameraRef.current.takePictureAsync({
+            base64: true,
+            quality: 0.5,
+          });
+          console.log('Photo taken, calling API...');
 
-        // Recognize person using backend
-        const result = await api.recognizePerson(photo.base64);
-        
-        if (result.matched) {
-          // Person recognized - show AI note
-          Alert.alert(
-            'Person Recognized!',
-            result.note,
-            [
-              { text: 'OK', onPress: () => router.back() }
-            ]
-          );
-        } else {
-          // Person not recognized - offer to add them
-          Alert.alert(
-            'Person Not Found',
-            'This person is not in your database. Would you like to add them?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { 
-                text: 'Add Person', 
-                onPress: () => router.push({
-                  pathname: '/add-person-modal',
-                  params: { imageBase64: photo.base64 }
-                })
+          // Recognize person using backend
+          const result = await api.recognizePerson(photo.base64);
+          console.log('API result:', result);
+          
+          if (result.matched) {
+            console.log('Match found!', result);
+            
+            // IMMEDIATELY stop scanning on first match
+            if (scanInterval.current) {
+              clearInterval(scanInterval.current);
+              scanInterval.current = null;
+              setScanning(false);
+            }
+            
+            const message = `Found: ${result.person?.name || 'Unknown'}`;
+            const note = result.note || 'No additional information';
+            setLastResult(`✅ ${message}\n${note}`);
+            
+            // Store the latest audio and reset timeout
+            if (result.audio) {
+              pendingAudio.current = result.audio;
+              
+              // Clear existing timeout
+              if (audioTimeout.current) {
+                clearTimeout(audioTimeout.current);
               }
-            ]
-          );
+              
+              // Set new timeout to play audio after delay
+              audioTimeout.current = setTimeout(async () => {
+                if (pendingAudio.current) {
+                  try {
+                    // Write base64 audio to temporary file
+                    const audioUri = `${FileSystem.documentDirectory}temp_audio.mp3`;
+                    await FileSystem.writeAsStringAsync(audioUri, pendingAudio.current, {
+                      encoding: FileSystem.EncodingType.Base64,
+                    });
+                    
+                    // Play audio using Expo AV
+                    const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
+                    await sound.playAsync();
+                    
+                    console.log('Final audio played successfully');
+                  } catch (e) {
+                    console.error('Audio processing failed:', e);
+                  }
+                  pendingAudio.current = null;
+                }
+              }, 1000); // Wait 1 second for any pending responses
+            }
+            
+            console.log('RECOGNITION SUCCESS:', message, note);
+          } else {
+            console.log('No match found', result);
+            setLastResult('❌ No person recognized');
+          }
+        } catch (error) {
+          console.error('Scanning error:', error);
+          setLastResult(`Error: ${error.message}`);
         }
-      } catch (error) {
-        Alert.alert('Error', 'Failed to scan face. Please try again.');
-      } finally {
-        setLoading(false);
       }
+    }, 2000); // Scan every 2 seconds
+  };
+
+  const stopScanning = () => {
+    setScanning(false);
+    if (scanInterval.current) {
+      clearInterval(scanInterval.current);
+      scanInterval.current = null;
     }
+    if (audioTimeout.current) {
+      clearTimeout(audioTimeout.current);
+      audioTimeout.current = null;
+    }
+    setLastResult('');
+    pendingAudio.current = null;
   };
 
   return (
@@ -118,7 +176,7 @@ export default function SimpleCamera() {
               <Text style={styles.backText}>←</Text>
             </TouchableOpacity>
             
-            <Text style={styles.instruction}>Point camera at a person's face and tap to scan</Text>
+            <Text style={styles.instruction}>Point camera at a person's face and tap START SCAN</Text>
             
             {/* Zoom Level Indicator */}
             {zoom > 0.05 && (
@@ -127,16 +185,25 @@ export default function SimpleCamera() {
               </View>
             )}
             
+            {/* Scan Results */}
+            {lastResult && (
+              <View style={styles.resultContainer}>
+                <Text style={styles.resultText}>{lastResult}</Text>
+              </View>
+            )}
+            
             <View style={styles.bottomControls}>
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#fff" />
-                  <Text style={styles.loadingText}>Scanning...</Text>
-                </View>
-              ) : (
-                <TouchableOpacity style={styles.scanButton} onPress={scanFace}>
+              {scanning ? (
+                <TouchableOpacity style={[styles.scanButton, styles.stopButton]} onPress={stopScanning}>
                   <View style={styles.scanInner}>
-                    <Text style={styles.scanText}>SCAN</Text>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.scanText}>STOP</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.scanButton} onPress={startScanning}>
+                  <View style={styles.scanInner}>
+                    <Text style={styles.scanText}>START SCAN</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -237,5 +304,27 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontWeight: '600'
   },
+  resultContainer: {
+    position: 'absolute',
+    top: 250,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    borderRadius: 15,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#7C4DFF'
+  },
+  resultText: {
+    color: '#fff',
+    fontSize: 18,
+    textAlign: 'center',
+    fontWeight: '700',
+    lineHeight: 24
+  },
+  stopButton: {
+    backgroundColor: 'rgba(255,77,77,0.8)'
+  },
+
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

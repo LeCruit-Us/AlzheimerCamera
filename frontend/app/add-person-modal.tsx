@@ -30,6 +30,7 @@ export default function AddPersonModal() {
   const [notes, setNotes] = useState(params.notes as string || '');
   const [capturedImage, setCapturedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [cameraType, setCameraType] = useState<ImagePicker.CameraType>(ImagePicker.CameraType.back);
   
   // If image was passed from camera, use it
   React.useEffect(() => {
@@ -59,6 +60,7 @@ export default function AddPersonModal() {
         aspect: [1, 1], // Square aspect ratio for face photos
         quality: 0.8,
         base64: true,
+        cameraType: cameraType,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -173,20 +175,30 @@ export default function AddPersonModal() {
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity 
-              style={styles.cameraButton}
-              onPress={handleTakePhoto}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <>
-                  <Text style={styles.cameraButtonIcon}>📷</Text>
-                  <Text style={styles.cameraButtonText}>Open Camera</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View>
+              <View style={styles.cameraControls}>
+                <TouchableOpacity 
+                  style={styles.flipButton}
+                  onPress={() => setCameraType(cameraType === ImagePicker.CameraType.back ? ImagePicker.CameraType.front : ImagePicker.CameraType.back)}
+                >
+                  <Text style={styles.flipText}>📱 {cameraType === ImagePicker.CameraType.back ? 'Front' : 'Back'}</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity 
+                style={styles.cameraButton}
+                onPress={handleTakePhoto}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <>
+                    <Text style={styles.cameraButtonIcon}>📷</Text>
+                    <Text style={styles.cameraButtonText}>Open Camera</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
         </View>
         )}
@@ -377,6 +389,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retakeText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cameraControls: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  flipButton: {
+    backgroundColor: PURPLE,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  flipText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
