@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,13 +9,24 @@ import { api } from '../services/api';
 
 export default function SimpleCamera() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [zoom, setZoom] = useState(0);
+  const [lastResult, setLastResult] = useState('');
   const cameraRef = useRef(null);
   const router = useRouter();
+  const scanInterval = useRef(null);
   
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (scanInterval.current) {
+        clearInterval(scanInterval.current);
+      }
+    };
+  }, []);
   
   const updateZoom = (newZoom) => {
     const clampedZoom = Math.max(0, Math.min(1, newZoom));
@@ -56,50 +67,75 @@ export default function SimpleCamera() {
     );
   }
 
-  const scanFace = async () => {
-    if (cameraRef.current && !loading) {
-      setLoading(true);
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          base64: true,
-          quality: 0.8,
-        });
+  const startScanning = () => {
+    setScanning(true);
+    scanInterval.current = setInterval(async () => {
+      if (cameraRef.current) {
+        try {
+          console.log('Taking photo...');
+          const photo = await cameraRef.current.takePictureAsync({
+            base64: true,
+            quality: 0.5,
+          });
+          console.log('Photo taken, calling API...');
 
-        // Recognize person using backend
-        const result = await api.recognizePerson(photo.base64);
-        
-        if (result.matched) {
-          // Person recognized - show AI note
-          Alert.alert(
-            'Person Recognized!',
-            result.note,
-            [
-              { text: 'OK', onPress: () => router.back() }
-            ]
-          );
-        } else {
-          // Person not recognized - offer to add them
-          Alert.alert(
-            'Person Not Found',
-            'This person is not in your database. Would you like to add them?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { 
-                text: 'Add Person', 
-                onPress: () => router.push({
-                  pathname: '/add-person-modal',
-                  params: { imageBase64: photo.base64 }
-                })
+          // Recognize person using backend
+          const result = await api.recognizePerson(photo.base64);
+          console.log('API result:', result);
+          
+          if (result.matched) {
+            console.log('Match found!', result);
+            const message = `Found: ${result.person?.name || 'Unknown'}`;
+            const note = result.note || 'No additional information';
+            setLastResult(`✅ ${message}\n${note}`);
+            
+            // Stop scanning when match is found
+            stopScanning();
+            
+            // Browser notification
+            if ('Notification' in window) {
+              if (Notification.permission === 'granted') {
+                new Notification('Person Recognized!', {
+                  body: `${message}\n${note}`,
+                  icon: '/favicon.ico'
+                });
+              } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                  if (permission === 'granted') {
+                    new Notification('Person Recognized!', {
+                      body: `${message}\n${note}`,
+                      icon: '/favicon.ico'
+                    });
+                  }
+                });
               }
-            ]
-          );
+            }
+            
+            // Fallback: Browser alert
+            setTimeout(() => {
+              window.alert(`Person Recognized!\n\n${message}\n\n${note}`);
+            }, 100);
+            
+            console.log('RECOGNITION SUCCESS:', message, note);
+          } else {
+            console.log('No match found', result);
+            setLastResult('❌ No person recognized');
+          }
+        } catch (error) {
+          console.error('Scanning error:', error);
+          setLastResult(`Error: ${error.message}`);
         }
-      } catch (error) {
-        Alert.alert('Error', 'Failed to scan face. Please try again.');
-      } finally {
-        setLoading(false);
       }
+    }, 2000); // Scan every 2 seconds
+  };
+
+  const stopScanning = () => {
+    setScanning(false);
+    if (scanInterval.current) {
+      clearInterval(scanInterval.current);
+      scanInterval.current = null;
     }
+    setLastResult('');
   };
 
   return (
@@ -118,7 +154,7 @@ export default function SimpleCamera() {
               <Text style={styles.backText}>←</Text>
             </TouchableOpacity>
             
-            <Text style={styles.instruction}>Point camera at a person's face and tap to scan</Text>
+            <Text style={styles.instruction}>Point camera at a person's face and tap START SCAN</Text>
             
             {/* Zoom Level Indicator */}
             {zoom > 0.05 && (
@@ -127,16 +163,32 @@ export default function SimpleCamera() {
               </View>
             )}
             
+            {/* Scan Results */}
+            {lastResult && (
+              <View style={styles.resultContainer}>
+                <Text style={styles.resultText}>{lastResult}</Text>
+              </View>
+            )}
+            
+            {/* Web-compatible result display */}
+            {lastResult && (
+              <View style={styles.webResultContainer}>
+                <Text style={styles.webResultText}>{lastResult}</Text>
+              </View>
+            )}
+            
             <View style={styles.bottomControls}>
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#fff" />
-                  <Text style={styles.loadingText}>Scanning...</Text>
-                </View>
-              ) : (
-                <TouchableOpacity style={styles.scanButton} onPress={scanFace}>
+              {scanning ? (
+                <TouchableOpacity style={[styles.scanButton, styles.stopButton]} onPress={stopScanning}>
                   <View style={styles.scanInner}>
-                    <Text style={styles.scanText}>SCAN</Text>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.scanText}>STOP</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.scanButton} onPress={startScanning}>
+                  <View style={styles.scanInner}>
+                    <Text style={styles.scanText}>START SCAN</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -236,6 +288,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 10,
     fontWeight: '600'
+  },
+  resultContainer: {
+    position: 'absolute',
+    top: 250,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    borderRadius: 15,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#7C4DFF'
+  },
+  resultText: {
+    color: '#fff',
+    fontSize: 18,
+    textAlign: 'center',
+    fontWeight: '700',
+    lineHeight: 24
+  },
+  stopButton: {
+    backgroundColor: 'rgba(255,77,77,0.8)'
+  },
+  webResultContainer: {
+    position: 'fixed',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    borderRadius: 15,
+    padding: 20,
+    borderWidth: 3,
+    borderColor: '#00FF00',
+    zIndex: 1000,
+    maxWidth: '80%'
+  },
+  webResultText: {
+    color: '#00FF00',
+    fontSize: 20,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    lineHeight: 28
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

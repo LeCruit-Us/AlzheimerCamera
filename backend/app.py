@@ -67,22 +67,32 @@ def recognize_face():
             FaceMatchThreshold=70
         )
         
+        print(f"Rekognition response: {len(response.get('FaceMatches', []))} matches found")
+        
         if response['FaceMatches']:
             match = response['FaceMatches'][0]
             person_id = match['Face']['ExternalImageId']
+            confidence = match['Similarity']
+            print(f"Match found: person_id={person_id}, confidence={confidence}%")
             
             # Get person info from DynamoDB
             db_response = table.get_item(Key={'person_id': person_id})
             person_info = db_response.get('Item', {})
+            print(f"Person info: {person_info.get('name', 'Unknown')}")
             
             # Generate AI note using Bedrock
             ai_note = generate_bedrock_note(person_info)
+            print(f"Generated note: {ai_note[:50]}...")
             
-            return jsonify({
+            result = {
                 'matched': True,
+                'person': {'name': person_info.get('name', 'Unknown')},
                 'note': ai_note
-            })
+            }
+            print(f"Returning result: {result}")
+            return jsonify(result)
         else:
+            print("No matches found")
             return jsonify({
                 'matched': False,
                 'note': 'Person not recognized'

@@ -1,42 +1,33 @@
-from flask import Flask, Response, request
-import base64, cv2, numpy as np
+from flask import Flask, Response, request, jsonify
+from flask_cors import CORS
+import base64
 
 app = Flask(__name__)
+CORS(app)
 
-latest_frame = None  # global variable to store last uploaded frame
+latest_frame_b64 = None  # global variable to store last uploaded frame as base64
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    global latest_frame
-    data = request.get_json()
-    if not data or "frame" not in data:
-        return "No frame provided", 400
-    
-    jpg_original = base64.b64decode(data["frame"])
-    np_arr = np.frombuffer(jpg_original, np.uint8)
-    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    global latest_frame_b64
+    try:
+        data = request.get_json()
+        if not data or "frame" not in data:
+            return jsonify({"error": "No frame provided"}), 400
+        
+        latest_frame_b64 = data["frame"]  # store base64 string directly
 
-    latest_frame = img  # store last frame
-    cv2.imwrite("received_frame.jpg", img)  # optional save
+        return jsonify({"success": True, "message": "Frame received"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    return "Frame received", 200
-
-def generate_mjpeg():
-    global latest_frame
-    while True:
-        if latest_frame is not None:
-            ret, jpeg = cv2.imencode('.jpg', latest_frame)
-            if ret:
-                frame = jpeg.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-        # a small delay helps avoid CPU overload
-        import time; time.sleep(0.1)
-
-@app.route('/stream')
-def stream():
-    return Response(generate_mjpeg(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/get_frame')
+def get_frame():
+    global latest_frame_b64
+    if latest_frame_b64:
+        return jsonify({"frame": latest_frame_b64})
+    else:
+        return jsonify({"error": "No frame available"}), 404
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, threaded=True)

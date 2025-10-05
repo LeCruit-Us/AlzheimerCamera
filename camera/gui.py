@@ -6,10 +6,18 @@ import time
 
 url = "http://127.0.0.1:5000/upload"
 
-cap = cv2.VideoCapture(2)
+# Try different camera indices
+camera_found = False
+for camera_id in [0, 1, 2, 3]:
+    cap = cv2.VideoCapture(camera_id)
+    if cap.isOpened():
+        print(f"Using camera {camera_id}")
+        camera_found = True
+        break
+    cap.release()
 
-if not cap.isOpened():
-    print("Error: Could not open webcam")
+if not camera_found:
+    print("Error: Could not open any webcam")
     exit()
 
 while True:
@@ -17,24 +25,27 @@ while True:
     if not ret:
         break
 
-    # Encode frame to JPEG
-    _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    # Convert raw frame directly to base64 (much faster)
+    frame_bytes = frame.tobytes()
+    frame_b64 = base64.b64encode(frame_bytes).decode('utf-8')
 
-    # Convert to base64 string
-    jpg_as_text = base64.b64encode(buffer).decode('utf-8')
-
-    # Build JSON payload
-    payload = json.dumps({"frame": jpg_as_text})
+    # Build JSON payload with raw frame data
+    payload = json.dumps({"frame": frame_b64, "shape": frame.shape})
 
     headers = {"Content-Type": "application/json"}
 
     try:
-        response = requests.post(url, data=payload, headers=headers, timeout=5)
-        print("Server response:", response.status_code)
+        response = requests.post(url, data=payload, headers=headers, timeout=1)
+        if response.status_code == 200:
+            print("✓ Frame sent successfully")
+        else:
+            print(f"✗ Server error: {response.status_code}")
+    except requests.exceptions.ConnectionError:
+        print("✗ Cannot connect to server - is ex_backend.py running?")
     except Exception as e:
-        print("Error sending frame:", e)
+        print(f"✗ Error sending frame: {e}")
 
-    # Send frame every 3 seconds
-    time.sleep(3)
+    # No delay - send as fast as possible
+    pass
 
 cap.release()
