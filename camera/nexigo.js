@@ -9,7 +9,7 @@ const Webcam = NodeWebcam.create({
   width: 1280,
   height: 720,
   quality: 100,
-  device: "/dev/video2",   // Your NexiGo camera
+  device: "/dev/video0",   // Your NexiGo camera
   output: "jpeg",
   callbackReturn: "location"
 });
