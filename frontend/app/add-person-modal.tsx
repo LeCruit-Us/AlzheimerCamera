@@ -8,7 +8,12 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
-  Image
+  Image,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -124,15 +129,24 @@ export default function AddPersonModal() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
-          <Text style={styles.cancelText}>Cancel</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Add New Person</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Add New Person</Text>
+          <View style={styles.placeholder} />
+        </View>
 
-      <View style={styles.content}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
         {/* Camera Section */}
         <View style={styles.cameraSection}>
           <Text style={styles.sectionTitle}>Take Photo</Text>
@@ -216,22 +230,24 @@ export default function AddPersonModal() {
           </View>
         </View>
 
-        {/* Submit Button */}
-        <TouchableOpacity 
-          style={[
-            styles.submitButton,
-            (!name.trim() || !role || !capturedImage || isLoading) && styles.submitButtonDisabled
-          ]}
-          onPress={handleSubmit}
-          disabled={!name.trim() || !role || !capturedImage || isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.submitButtonText}>Add Person</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+            {/* Submit Button */}
+            <TouchableOpacity 
+              style={[
+                styles.submitButton,
+                (!name.trim() || !role || !capturedImage || isLoading) && styles.submitButtonDisabled
+              ]}
+              onPress={handleSubmit}
+              disabled={!name.trim() || !role || !capturedImage || isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.submitButtonText}>Add Person</Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -240,6 +256,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FAF7FF',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
   },
   header: {
     flexDirection: 'row',
@@ -266,10 +289,7 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 60,
   },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
+
   centerContent: {
     flex: 1,
     justifyContent: 'center',
@@ -377,7 +397,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 'auto',
+    marginTop: 30,
+    marginBottom: 20,
   },
   submitButtonDisabled: {
     backgroundColor: '#D0D0D0',

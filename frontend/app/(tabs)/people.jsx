@@ -41,7 +41,7 @@ export default function People() {
           id: index.toString(),
           name: person.name,
           relation: person.relationship,
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(person.name)}&background=7C4DFF&color=fff&size=200`
+          avatar: person.image_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(person.name)}&background=7C4DFF&color=fff&size=200`
         }));
         console.log('Formatted people:', formattedPeople);
         setPeople(formattedPeople);

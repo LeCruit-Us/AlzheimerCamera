@@ -264,12 +264,25 @@ def get_reminders():
         
         reminders = []
         for person in people:
+            # Generate presigned URL for the image
+            image_url = None
+            if person.get('s3_key'):
+                try:
+                    image_url = s3.generate_presigned_url(
+                        'get_object',
+                        Params={'Bucket': BUCKET_NAME, 'Key': person.get('s3_key')},
+                        ExpiresIn=3600  # 1 hour
+                    )
+                except Exception as e:
+                    print(f"Error generating presigned URL: {e}")
+            
             reminders.append({
                 'name': person.get('name'),
                 'relationship': person.get('relationship'),
                 'age': person.get('age'),
                 'notes': person.get('notes'),
-                'added_date': person.get('created_at')
+                'added_date': person.get('created_at'),
+                'image_url': image_url
             })
         
         return jsonify({'reminders': reminders})
