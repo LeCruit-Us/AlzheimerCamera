@@ -12,3 +12,6 @@ node_modules
 
 # Scrap ESP32-CAM backend
 platformio.ini
+.pio
+network/
+
