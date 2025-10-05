@@ -1,50 +1,41 @@
-# Welcome to your Expo app 👋
+# AlzheimerCamera Mobile App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Expo/React Native companion app that lets caregivers manage recognized people, review AI reminders, and curate memory photos for each profile.
 
-## Get started
-
+## Quick Start
 1. Install dependencies
-
    ```bash
    npm install
    ```
-
-2. Start the app
-
+2. Configure backend URL
+   - Edit `services/api.js` and set `API_BASE_URL` to the machine/IP where the Flask backend runs (e.g., `http://192.168.x.x:8000`).
+3. Launch Expo
    ```bash
    npx expo start
    ```
+   Scan the QR code with Expo Go or run on an emulator/simulator.
 
-In the output, you'll find options to open the app in a
+## App Structure
+- `app/(tabs)/` – Main tab navigator (home, people, reminders, settings).
+- `app/add-person-modal.tsx` – Modal for creating/editing profiles with camera integration.
+- `app/person/[personId].tsx` – Memory gallery screen; displays and uploads per-person photos.
+- `services/api.js` – Fetch helpers for all backend endpoints.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Memory Albums Workflow
+1. Open **People Stored** and tap a person row to open their album. The row shows how many memories are saved.
+2. Press **＋ Add Memory Photo** to pick a picture from the device library. The app uploads it as base64 to `/person/<person_id>/memories` and refreshes the grid with the returned presigned URL.
+3. Pull-to-refresh the album to request a fresh set of presigned links if the backend restarts.
+4. Removing a person from the list will also delete their memory assets via the backend, so photos disappear automatically from the album the next time it loads.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Development Tips
+- Use `npm run lint` to check for common issues.
+- If you change the backend IP mid-session, reload the app (shake device → Reload) so `API_BASE_URL` takes effect.
+- Expo logs warn that `ImagePicker.MediaTypeOptions` is deprecated; we plan to migrate to `ImagePicker.MediaType` in a future update.
 
-## Get a fresh project
+## Troubleshooting
+- **Unexpected character `<` when parsing JSON**: The app received HTML (often from a network error). Ensure `API_BASE_URL` is reachable from the device and the backend is running.
+- **Stale presigned URLs**: Pull-to-refresh the album or reopen the screen—each request generates fresh URLs that remain valid for one hour by default.
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Related Docs
+- Backend endpoint details live in `../backend/README.md`.
+- Overall project overview is in the root `README.md`.
