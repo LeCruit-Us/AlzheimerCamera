@@ -44,4 +44,3 @@ We’re exploring on-device fallbacks so the camera can keep working during patc
     ElevenLabs TTS
     React Native + Expo
     AsyncStorage
-    Raspberry Pi hardware
