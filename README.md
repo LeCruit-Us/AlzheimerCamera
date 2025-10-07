@@ -1,3 +1,5 @@
+DevPost: https://devpost.com/software/remember-me-e6pyuv
+
 # Remember Me
 Remember Me gives ones family a calm and affordable way to help loved ones when their memory falters. By pairing a friendly camera with a mobile app, we turn everyday moments into reassuring reminders so families can stay connected, even when names are hard to recall.
 
