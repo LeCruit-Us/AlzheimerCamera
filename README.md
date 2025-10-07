@@ -10,10 +10,10 @@ Contributors: Roy Zheng, Thomas Ah Sing, Aaron Rhim, Elijah Zhao
 One of our team members experienced this challenge firsthand: their grandfather had a severe case of Alzheimer’s, but due to limited resources and the lack of accessible technology at the time, they were unable to preserve and enrich his life with cherished memories. Our team was deeply motivated by his story which led to our passion to create impactful technology for health and societal well-being. With the rise of high-end gadgets like the Meta Ray-Bans, we began exploring how similar innovations could be made more accessible and tailored to truly support people in need.
 
 ### 📖What it does
-- Easily attach the camera to your clothes so that when a familiar face appears, the system gently announces who it is, their relationship, and a comforting note
-- Family can capture and add "people profiles" with photos and information that are displays in the "memories" page
-- The companion mobile app keeps track of memory albums, daily reminders, and personal notes so that Alzheimer's patients can remember past highlights easily 
-- Alerts trigger a soft vibration on the phone, while audio clips give the person with Alzheimer's an easy way to recognize a familiar face 
+- Easily attach the camera to your clothes and whenever you pass by someone you've previously met, it will announce the name of that person, their relationship with you, and a short note
+- You can add these "people profiles" easily onto the app (currently works on iPhone) by taking a quick picture of the person and filling in general information (this would usually be done by a family member)
+- You can also "revisit" the people profiles in an easy-to-use "memories" page. Here you can also add a photo album for each of the people in your memories
+- There is a reminders page so that you can get alerts when you need to do someething (e.g. take medication, attend this event, etc.)
 
 ### 💪How we built it
 We started off with connecting a NexiGo N60 1080p Webcam to our laptop so that we can stream video and audio in real time. In python, we used OpenCV to send post requests from the camera to our Flask backend. 
